@@ -61,6 +61,28 @@ ADRs: [`0024`](decisions/0024-real-world-audit-fixes.md),
 | p-queue `b2600d5` | 2 expected errors: Node 20 migration exceeds budget and rewrites tests |
 | Express `697547c` | 2 expected errors: security revert removes 9 tests/assertions |
 
+## P2 hardened rerun
+
+Rerun on the P2 changes (ADR 0037/0038) with the same local clones, `--jobs 4`,
+first-parent history:
+
+| Project | Window | Time | Findings | Commits with findings |
+|---|---|---:|---:|---:|
+| `pallets/click` | 1,000 commits | 88s | 2,858 | 331 |
+| `BurntSushi/ripgrep` | 1,000 commits | 184s | 861 | 193 |
+| `vitejs/vite` | 1,000 commits | 144s | 1,482 | 378 |
+| `expressjs/express` | 1,000 commits | 47s | 728 | 213 |
+| `dtolnay/anyhow` | 100 commits | 9s | 14 | 9 |
+| `sindresorhus/p-queue` | 100 commits | 6s | 249 | 44 |
+
+Changes versus the previous audit are explainable by the P2 fixes: Click loses
+the docs-only dependency/edge, anyhow loses Rust parameter-name private API
+noise, p-queue/Express lose JS declaration comment changes, and Vite loses
+private/excluded surface noise. No runs crashed. Vite and ripgrep are slower
+than the prior optimized pass because source discovery now consults Git and
+applies symlink/size/dependency-scope checks; Vite remains under 2.5 minutes for
+1,000 commits. `--jobs 1` and `--jobs 4` produce identical p-queue payloads.
+
 ## Remaining observations
 
 - Merge-heavy first-parent windows are noisy; `--all` or PR/MR history is better

@@ -1,3 +1,3 @@
 """Aedificatoria: deterministic architecture guard for coding agents."""
 
-__version__ = "0.1.1"
+__version__ = "0.1.2"
