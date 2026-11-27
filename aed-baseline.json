@@ -13,6 +13,7 @@
       "collect": "(root:Path,config:Config)->dict[str,Any]",
       "compare": "(baseline:dict[str,Any],head:dict[str,Any],config:Config)->list[Finding]",
       "load": "(root:Path,path:str)->dict[str,Any]|None",
+      "update": "(previous:dict[str,Any],root:Path,config:Config,changes:list[tuple[str,str|None,str|None]])->dict[str,Any]",
       "write": "(root:Path,path:str,data:dict[str,Any])->Path"
     },
     "src/aedificatoria/cargo.py": {
@@ -70,6 +71,7 @@
       "changed_files": "(repo:Path,base_commit:str,*,staged:bool=False)->list[ChangedFile]",
       "commit_exists": "(repo:Path,ref:str)->bool",
       "commit_parents": "(repo:Path,ref:str)->tuple[str,...]",
+      "diff_paths": "(repo:Path,old:str,new:str)->list[tuple[str,str|None,str|None]]",
       "diff_stats": "(repo:Path,base:str|None,head:str)->tuple[int,int]",
       "history_commits": "(repo:Path,limit:int,since:str|None=None,head:str='HEAD')->list[tuple[str,str,str]]",
       "history_graph": "(repo:Path,limit:int,since:str|None=None,head:str='HEAD')->list[tuple[str,tuple[str,...],str,str]]",
@@ -209,20 +211,24 @@
     "src/aedificatoria/baseline.py": {
       "_api_findings": 10,
       "_api_symbols": 5,
-      "_collect_file": 12,
+      "_collect_file": 15,
       "_complexity_findings": 7,
+      "_copy_data": 7,
       "_dependencies": 5,
       "_dependency_findings": 5,
+      "_drop_file": 3,
       "_edge_findings": 12,
       "_file_facts": 4,
+      "_finish": 2,
       "_mapping": 2,
       "_nested_total": 4,
       "_source_files": 1,
       "_test_case_findings": 7,
       "_test_findings": 7,
-      "collect": 3,
+      "collect": 2,
       "compare": 1,
       "load": 6,
+      "update": 3,
       "write": 2
     },
     "src/aedificatoria/cargo.py": {
@@ -311,6 +317,7 @@
       "changed_files": 12,
       "commit_exists": 1,
       "commit_parents": 1,
+      "diff_paths": 8,
       "diff_stats": 6,
       "history_commits": 4,
       "history_graph": 4,
@@ -360,7 +367,7 @@
       "_materialize": 2,
       "_merge_edit_finding": 4,
       "_point": 1,
-      "_regressions": 3,
+      "_regressions": 4,
       "_relabel": 1,
       "_summary": 3,
       "_test_counts": 6,
@@ -616,6 +623,7 @@
       "test_baseline_missing_is_info": 2,
       "test_baseline_resolves_private_reexport": 1,
       "test_file_fact_cache_is_content_keyed": 2,
+      "test_incremental_update_matches_full_collect": 1,
       "test_index_cache_cleared_between_collects": 2
     },
     "tests/test_checks.py": {

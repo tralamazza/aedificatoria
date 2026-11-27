@@ -283,6 +283,34 @@ def changed_files(repo: Path, base_commit: str, *, staged: bool = False) -> list
     return enriched
 
 
+def diff_paths(repo: Path, old: str, new: str) -> list[tuple[str, str | None, str | None]]:
+    """Return (status, old_path, new_path) for a commit-to-commit diff."""
+    proc = _git(repo, "diff", "--name-status", "--find-renames", "-z", old, new, "--")
+    tokens = proc.stdout.split(b"\0")
+    changes: list[tuple[str, str | None, str | None]] = []
+    index = 0
+    while index < len(tokens):
+        status_raw = tokens[index]
+        index += 1
+        if not status_raw:
+            continue
+        code = os.fsdecode(status_raw)[0]
+        if code in {"R", "C"}:
+            if index + 1 >= len(tokens):
+                break
+            old_path = os.fsdecode(tokens[index])
+            new_path = os.fsdecode(tokens[index + 1])
+            index += 2
+            changes.append((code, old_path, new_path))
+        else:
+            if index >= len(tokens):
+                break
+            path = os.fsdecode(tokens[index])
+            index += 1
+            changes.append((code, None if code == "A" else path, None if code == "D" else path))
+    return changes
+
+
 @contextmanager
 def index_tree(repo: Path) -> Generator[Path, None, None]:
     """Materialize the staged index into a temporary directory."""

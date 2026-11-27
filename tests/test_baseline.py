@@ -32,6 +32,35 @@ def snapshot(repo: Path, config: Config | None = None) -> None:
     baseline.write(repo, cfg.baseline_path, baseline.collect(repo, cfg))
 
 
+def test_incremental_update_matches_full_collect(tmp_path: Path):
+    root = tmp_path / "tree-aed-incremental"
+    root.mkdir()
+    (root / "src").mkdir()
+    (root / "tests").mkdir()
+    (root / "src" / "a.py").write_text("def a():\n    return 1\n")
+    (root / "src" / "old.py").write_text("def old():\n    return 0\n")
+    (root / "tests" / "test_a.py").write_text("def test_a():\n    assert True\n")
+    config = Config()
+    first = baseline.collect(root, config)
+
+    (root / "src" / "a.py").write_text("def a():\n    if True:\n        return 1\n    return 0\n")
+    (root / "src" / "old.py").unlink()
+    (root / "src" / "b.py").write_text("def b():\n    return 2\n")
+    (root / "tests" / "test_a.py").write_text("def test_a():\n    assert True\n    assert 1 == 1\n")
+    (root / "node_modules" / "pkg").mkdir(parents=True)
+    (root / "node_modules" / "pkg" / "index.js").write_text("export const ignored = 1;\n")
+    changes = [
+        ("M", "src/a.py", "src/a.py"),
+        ("D", "src/old.py", None),
+        ("A", None, "src/b.py"),
+        ("M", "tests/test_a.py", "tests/test_a.py"),
+        ("A", None, "node_modules/pkg/index.js"),
+    ]
+    updated = baseline.update(first, root, config, changes)
+    full = baseline.collect(root, config)
+    assert updated == full
+
+
 def test_index_cache_cleared_between_collects(tmp_path: Path):
     root = tmp_path / "tree-aed-cache"
     write = lambda rel, text: (root / rel).parent.mkdir(parents=True, exist_ok=True) or (root / rel).write_text(text)

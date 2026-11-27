@@ -24,11 +24,12 @@ from .git import (
     commit_exists,
     commit_parents,
     diff_stats,
+    diff_paths,
     history_commits,
     history_graph,
     merge_edited_files,
 )
-from .model import Finding
+from .model import SEVERITY_RANK, Finding
 from .pyast import strongly_connected
 
 _SQUASH_PR = re.compile(r"\(#(\d+)\)\s*$")
@@ -262,6 +263,15 @@ def _regressions(
                 evidence=f"{commit[:12]} {subject}",
             )
         )
+    findings.sort(
+        key=lambda item: (
+            -SEVERITY_RANK[item.severity],
+            item.path,
+            item.line or 0,
+            item.rule,
+            item.message,
+        )
+    )
     return findings
 
 
@@ -310,10 +320,17 @@ def _collect_chunk(
         return []
     results: list[dict[str, Any]] = []
     with _worktree_tree(Path(repo), commits[0]) as tree:
+        previous: dict[str, Any] | None = None
         for index, sha in enumerate(commits):
             if index:
+                changes = diff_paths(Path(repo), commits[index - 1], sha)
                 _checkout_tree(tree, sha)
-            results.append(baseline.collect(tree, config))
+                assert previous is not None
+                current = baseline.update(previous, tree, config, changes)
+            else:
+                current = baseline.collect(tree, config)
+            results.append(current)
+            previous = current
     return results
 
 

@@ -3,6 +3,8 @@
 - Status: accepted
 - Date: 2026-11-27
 
+- Amended by: 0028 (incremental history updates)
+
 ## Context
 
 After worktree reuse and parse-tree caching, Vite 1k history dropped to 213s,

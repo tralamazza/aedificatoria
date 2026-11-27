@@ -16,7 +16,7 @@ from typing import Any
 
 from . import jsts, languages, pyast
 from .config import Config
-from .git import tracked_source_files
+from .git import _SKIP_DIRS, tracked_source_files
 from .model import Finding, TestInfo
 
 VERSION = 3
@@ -51,7 +51,9 @@ def _file_facts(
 
 
 def _collect_file(root: Path, rel: str, config: Config, data: dict[str, Any]) -> None:
-    if config.is_metric_excluded(rel):
+    if any(part in _SKIP_DIRS for part in Path(rel).parts[:-1]):
+        return
+    if config.is_excluded(rel) or config.is_metric_excluded(rel):
         return
     adapter = languages.get(rel)
     if adapter is None:
@@ -87,6 +89,57 @@ def _dependencies(root: Path, config: Config) -> list[str]:
     return sorted(found)
 
 
+def _finish(
+    root: Path,
+    config: Config,
+    data: dict[str, Any],
+) -> dict[str, Any]:
+    jsts._clear_index_cache()
+    try:
+        data["dependencies"] = _dependencies(root, config)
+        edges, _packages = languages.package_graph(root, config)
+        data["edges"] = [list(edge) for edge in sorted(edges)]
+    finally:
+        jsts._clear_index_cache()
+    return data
+
+
+def _copy_data(previous: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "version": VERSION,
+        "complexity": {key: dict(value) for key, value in _mapping(previous.get("complexity")).items()},
+        "api": {key: dict(value) for key, value in _mapping(previous.get("api")).items()},
+        "dependencies": list(previous.get("dependencies") or []),
+        "edges": list(previous.get("edges") or []),
+        "tests": {key: dict(value) for key, value in _mapping(previous.get("tests")).items()},
+        "test_cases": {key: dict(value) for key, value in _mapping(previous.get("test_cases")).items()},
+    }
+
+
+def _drop_file(data: dict[str, Any], path: str | None) -> None:
+    if path is None:
+        return
+    for key in ("complexity", "api", "tests", "test_cases"):
+        data[key].pop(path, None)
+
+
+def update(
+    previous: dict[str, Any],
+    root: Path,
+    config: Config,
+    changes: list[tuple[str, str | None, str | None]],
+) -> dict[str, Any]:
+    """Recompute only changed paths from a previous full metric snapshot."""
+    data = _copy_data(previous)
+    jsts._clear_index_cache()
+    for _status, old_path, new_path in changes:
+        _drop_file(data, old_path)
+        _drop_file(data, new_path)
+        if new_path is not None:
+            _collect_file(root, new_path, config, data)
+    return _finish(root, config, data)
+
+
 def collect(root: Path, config: Config) -> dict[str, Any]:
     data: dict[str, Any] = {
         "version": VERSION,
@@ -99,14 +152,7 @@ def collect(root: Path, config: Config) -> dict[str, Any]:
     }
     for rel in _source_files(root, config):
         _collect_file(root, rel, config, data)
-    jsts._clear_index_cache()
-    try:
-        data["dependencies"] = _dependencies(root, config)
-        edges, _packages = languages.package_graph(root, config)
-        data["edges"] = [list(edge) for edge in sorted(edges)]
-    finally:
-        jsts._clear_index_cache()
-    return data
+    return _finish(root, config, data)
 
 
 def load(root: Path, path: str) -> dict[str, Any] | None:
