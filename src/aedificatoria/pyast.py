@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import re
 import sys
+import warnings
 from pathlib import Path
 
 from .config import Config
@@ -23,7 +24,9 @@ def parse_text(_path: str, text: str | None) -> ast.Module | None:
     if not text:
         return None
     try:
-        return ast.parse(text)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", SyntaxWarning)
+            return ast.parse(text)
     except SyntaxError:
         return None
 

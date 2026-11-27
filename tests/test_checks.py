@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 
+from aedificatoria import pyast
 from aedificatoria.checks import run_checks as run_all_checks
 from aedificatoria.config import Config, ForbiddenEdge, load_config, matches
 from aedificatoria.git import base_worktree, changed_files, resolve_commit
@@ -37,6 +39,14 @@ def test_glob_matching():
     assert matches("foo.proto", ("*.proto",))
     assert matches("src/foo.proto", ("*.proto",))
     assert matches("tests/test_thing.py", ("**/test_*.py",))
+
+
+def test_parse_text_suppresses_syntax_warnings():
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        tree = pyast.parse_text("old.py", 'value = "\\s"\n')
+    assert tree is not None
+    assert not any(issubclass(item.category, SyntaxWarning) for item in caught)
 
 
 def test_one_way_door_requires_adr(repo: Path, commit, write):
