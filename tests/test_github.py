@@ -53,6 +53,31 @@ def test_extract_tarball_rejects_traversal(tmp_path: Path):
         github.extract_tarball(archive, tmp_path / "out")
 
 
+def test_github_client_paginates_and_flattens(monkeypatch):
+    calls = []
+
+    class Result:
+        returncode = 0
+        stdout = b'[[{"sha":"a"}],[{"sha":"b"}]]'
+        stderr = b""
+
+    def fake_run(args, **kwargs):
+        calls.append(args)
+        return Result()
+
+    monkeypatch.setattr(github.subprocess, "run", fake_run)
+    client = github.GitHubClient("acme/aed")
+    payload = client._json("repos/acme/aed/pulls/1/commits", paginate=True)
+    assert payload == [{"sha": "a"}, {"sha": "b"}]
+    assert "--paginate" in calls[0]
+    assert "--slurp" in calls[0]
+
+
+def test_github_client_requires_gh():
+    with pytest.raises(github.GitHubError):
+        github.GitHubClient("acme/aed", gh="/nonexistent/gh")._json("repos/acme/aed")
+
+
 class FakeClient:
     def __init__(self, roots: dict[str, Path]):
         self.roots = roots

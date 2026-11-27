@@ -286,12 +286,12 @@
       "tracked_source_files": 8
     },
     "src/aedificatoria/github.py": {
-      "GitHubClient.__init__": 6,
+      "GitHubClient.__init__": 1,
       "GitHubClient._commit_stats": 7,
-      "GitHubClient._json": 2,
+      "GitHubClient._json": 6,
       "GitHubClient._parse_commit": 11,
-      "GitHubClient._request": 6,
-      "GitHubClient.pr_commits": 7,
+      "GitHubClient._run": 6,
+      "GitHubClient.pr_commits": 4,
       "GitHubClient.tarball": 2,
       "_safe_members": 6,
       "extract_tarball": 3,
@@ -558,6 +558,8 @@
       "test_evaluate_github_with_fake_client": 5,
       "test_extract_tarball": 1,
       "test_extract_tarball_rejects_traversal": 1,
+      "test_github_client_paginates_and_flattens": 3,
+      "test_github_client_requires_gh": 1,
       "test_history_github_cli": 3,
       "test_parse_slug": 5,
       "test_slug_from_remote": 1

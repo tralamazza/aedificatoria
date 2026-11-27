@@ -1,4 +1,4 @@
-"""Opt-in GitHub API recovery for history audits.
+"""Opt-in GitHub API recovery for history audits, through the GitHub CLI.
 
 This module is only used by `aed history --github-pr`; the deterministic guard
 never imports or calls it. Network access, credentials, and retention are the
@@ -8,17 +8,15 @@ user's explicit choice.
 from __future__ import annotations
 
 import json
-import os
 import shutil
+import subprocess
 import tarfile
 import tempfile
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Generator
-from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
-from urllib.request import Request, urlopen
 
 from .git import remote_url
 
@@ -80,48 +78,46 @@ def extract_tarball(archive: Path, destination: Path) -> Path:
 
 
 class GitHubClient:
-    def __init__(
-        self,
-        repo: str,
-        token: str | None = None,
-        api_url: str | None = None,
-        timeout: float = 60.0,
-    ) -> None:
+    def __init__(self, repo: str, gh: str = "gh", timeout: float = 120.0) -> None:
         self.repo = repo
-        self.token = token or os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN") or ""
-        self.api_url = (api_url or os.environ.get("GITHUB_API_URL") or "https://api.github.com").rstrip("/")
+        self.gh = gh
         self.timeout = timeout
 
-    def _request(self, path: str, accept: str) -> bytes:
-        url = path if path.startswith(("http://", "https://")) else f"{self.api_url}{path}"
-        headers = {
-            "Accept": accept,
-            "User-Agent": "aedificatoria",
-            "X-GitHub-Api-Version": "2022-11-28",
-        }
-        if self.token:
-            headers["Authorization"] = f"Bearer {self.token}"
+    def _run(self, path: str, paginate: bool = False) -> bytes:
+        args = [self.gh, "api"]
+        if paginate:
+            args.extend(["--paginate", "--slurp"])
+        args.append(path.lstrip("/"))
         try:
-            with urlopen(Request(url, headers=headers), timeout=self.timeout) as response:
-                return response.read()
-        except HTTPError as exc:
-            detail = exc.read().decode("utf-8", "replace")[:300]
-            if exc.code == 404:
-                raise GitHubError(
-                    f"GitHub API 404: {url} (PR commit may have been purged)"
-                ) from exc
-            raise GitHubError(f"GitHub API {exc.code}: {url} {detail}".strip()) from exc
-        except (URLError, TimeoutError) as exc:
-            raise GitHubError(f"GitHub API request failed: {url}: {exc}") from exc
+            proc = subprocess.run(args, capture_output=True, timeout=self.timeout, check=False)
+        except FileNotFoundError as exc:
+            raise GitHubError(
+                "`gh` CLI is required for --github-pr; install it and run `gh auth login`"
+            ) from exc
+        except subprocess.TimeoutExpired as exc:
+            raise GitHubError(f"gh api timed out: {path}") from exc
+        if proc.returncode != 0:
+            detail = proc.stderr.decode("utf-8", "replace").strip()[:400]
+            raise GitHubError(detail or f"gh api failed: {path}")
+        return proc.stdout
 
-    def _json(self, path: str) -> Any:
+    def _json(self, path: str, paginate: bool = False) -> Any:
         try:
-            return json.loads(self._request(path, "application/vnd.github+json"))
+            payload = json.loads(self._run(path, paginate=paginate))
         except json.JSONDecodeError as exc:
-            raise GitHubError(f"GitHub API returned invalid JSON: {path}") from exc
+            raise GitHubError(f"gh api returned invalid JSON: {path}") from exc
+        if paginate and isinstance(payload, list):
+            items: list[Any] = []
+            for page in payload:
+                if isinstance(page, list):
+                    items.extend(page)
+                else:
+                    items.append(page)
+            return items
+        return payload
 
     def _commit_stats(self, sha: str) -> tuple[int, int]:
-        payload = self._json(f"/repos/{self.repo}/commits/{sha}")
+        payload = self._json(f"repos/{self.repo}/commits/{sha}")
         if not isinstance(payload, dict):
             return 0, 0
         stats = payload.get("stats")
@@ -152,19 +148,11 @@ class GitHubClient:
         return PrCommit(sha, date if isinstance(date, str) else "", subject, parents)
 
     def pr_commits(self, pr: int, limit: int) -> list[PrCommit]:
-        items: list[Any] = []
-        for page in range(1, 4):
-            payload = self._json(
-                f"/repos/{self.repo}/pulls/{pr}/commits?per_page=100&page={page}"
-            )
-            if not isinstance(payload, list):
-                raise GitHubError(f"unexpected PR commit payload for #{pr}")
-            items.extend(payload)
-            if len(payload) < 100 or len(items) >= 250:
-                break
-        selected = items[-max(1, limit) :]
+        payload = self._json(f"repos/{self.repo}/pulls/{pr}/commits", paginate=True)
+        if not isinstance(payload, list):
+            raise GitHubError(f"unexpected PR commit payload for #{pr}")
         commits: list[PrCommit] = []
-        for item in selected:
+        for item in payload[-max(1, limit) :]:
             commit = self._parse_commit(item)
             if commit is None:
                 continue
@@ -177,7 +165,7 @@ class GitHubClient:
         root = Path(tempfile.mkdtemp(prefix="aed-gh-"))
         try:
             archive = root / "tree.tar.gz"
-            data = self._request(f"/repos/{self.repo}/tarball/{sha}", "application/vnd.github+json")
+            data = self._run(f"repos/{self.repo}/tarball/{sha}")
             if not data.startswith(b"\x1f\x8b"):
                 raise GitHubError(f"GitHub tarball for {sha[:12]} was not gzip data")
             archive.write_bytes(data)
