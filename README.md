@@ -238,15 +238,19 @@ from a pinned version outside the agent-writable workspace when possible.
 | Python | `ast` | top-level functions/classes, `__all__`, `__init__` re-exports | `test_*`, asserts, skip/xfail | absolute imports |
 | Rust | tree-sitter | `pub` items, fields, variants, impl methods | `#[test]`, `assert!`, `#[ignore]` | `use` roots, Cargo tables |
 | JS/TS | tree-sitter | ES/TS exports, CJS exports, methods | `test`/`it`/`describe`, `.skip`/`.only`, `.each` case tables | imports, `require`, `package.json` |
+| C/C++ | tree-sitter C/C++ | header functions/classes/enums/typedefs, public members | GoogleTest/Catch2 macros, assertions, skips | local quoted includes, external angled headers |
 
 Adapters live in `languages.py`; rule code is language-neutral. Rust/JS/TS is
 AST-level: no macro expansion or type checking. JS/TS resolves nearest
 `tsconfig.json`/`jsconfig.json` `baseUrl`/`paths` aliases, including local
 `extends`; package-manager `extends` and unresolved aliases fall back to external
 classification. `test.each`/`it.each` literal and template tables contribute
-case counts; variable tables are recognized but not ratcheted. With cargo
-installed and a root `Cargo.toml`, `aed check` adds `cargo-advisory` info
-findings from `cargo metadata --no-deps --offline`.
+case counts; variable tables are recognized but not ratcheted. C/C++ API is
+header-only; `.h` tries C++ then C when parse errors are lower. C/C++ includes
+use quoted-local/angled-external classification, with C/C++ standard headers
+allowed; CMake targets/dependencies, macros, templates, and ABI are not
+resolved. With cargo installed and a root `Cargo.toml`, `aed check` adds
+`cargo-advisory` info findings from `cargo metadata --no-deps --offline`.
 
 ## Limitations
 
@@ -261,6 +265,9 @@ findings from `cargo metadata --no-deps --offline`.
 - GitHub/GitLab fallback modes are opt-in, non-hermetic, and require `gh`/`glab`.
 - ADR quality is structural. Semantic test weakening and cumulative drift are
   not fully detectable.
+- C/C++ uses header declarations as API. Macros/templates are not expanded,
+  ABI is not checked, and CMake targets/dependencies are not parsed; package
+  edges use directory components and local quoted includes.
 
 ## Development
 

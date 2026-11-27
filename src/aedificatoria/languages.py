@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from . import jsts, pyast, rust
+from . import cfamily, jsts, pyast, rust
 from .config import Config
 from .model import TestInfo
 
@@ -65,6 +65,19 @@ ADAPTERS: tuple[Adapter, ...] = (
         project_imports=jsts.project_imports,
         declared_dependencies=jsts.declared_dependencies,
         local_packages=jsts.local_packages,
+    ),
+    Adapter(
+        name=cfamily.NAME,
+        extensions=cfamily.EXTENSIONS,
+        parse_text=cfamily.parse_text,
+        public_api=cfamily.public_api,
+        complexity=cfamily.complexity,
+        test_info=cfamily.test_info,
+        is_stdlib=cfamily.is_stdlib,
+        package_edges=cfamily.package_edges,
+        project_imports=cfamily.project_imports,
+        declared_dependencies=cfamily.declared_dependencies,
+        local_packages=cfamily.local_packages,
     ),
 )
 

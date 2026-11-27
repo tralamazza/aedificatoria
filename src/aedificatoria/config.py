@@ -58,6 +58,14 @@ _DEFAULT_TEST_PATHS = (
     "**/*.spec.*",
     "**/__tests__/**",
     "**/__test__/**",
+    "**/test_*.c",
+    "**/*_test.c",
+    "**/test_*.cc",
+    "**/*_test.cc",
+    "**/test_*.cpp",
+    "**/*_test.cpp",
+    "**/test_*.cxx",
+    "**/*_test.cxx",
 )
 
 _DEFAULT_TEST_CONFIG_PATHS = (
@@ -75,6 +83,7 @@ _DEFAULT_TEST_CONFIG_PATHS = (
     "**/cypress.config.*",
     "**/jest.setup.*",
     "**/vitest.setup.*",
+    "**/CTestTestfile.cmake",
 )
 
 _DEFAULT_METRIC_EXCLUDES = (
@@ -94,6 +103,11 @@ _DEFAULT_API_PATHS = (
     "**/*.tsx",
     "**/*.mts",
     "**/*.cts",
+    "**/*.h",
+    "**/*.hpp",
+    "**/*.hh",
+    "**/*.hxx",
+    "**/*.ixx",
 )
 
 

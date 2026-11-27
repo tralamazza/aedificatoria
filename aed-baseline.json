@@ -21,6 +21,20 @@
       "available": "()->bool",
       "metadata": "(root:Path)->CargoFacts|None"
     },
+    "src/aedificatoria/cfamily.py": {
+      "CFile": "class()",
+      "EXTENSIONS": "const",
+      "NAME": "const",
+      "complexity": "(tree:CFile|None)->dict[str,int]",
+      "declared_dependencies": "(_root:Path,_config:Config)->dict[str,tuple[str,int]]",
+      "is_stdlib": "(module:str)->bool",
+      "local_packages": "(root:Path,config:Config)->set[str]",
+      "package_edges": "(root:Path,config:Config)->tuple[set[tuple[str,str]],set[str]]",
+      "parse_text": "(path:str,text:str|None)->CFile|None",
+      "project_imports": "(root:Path,config:Config)->dict[str,tuple[str,int]]",
+      "public_api": "(tree:CFile|None)->dict[str,str]",
+      "test_info": "(tree:CFile|None)->TestInfo"
+    },
     "src/aedificatoria/checks.py": {
       "check_adr_quality": "(ctx:Context)->list[Finding]",
       "check_baseline": "(ctx:Context)->list[Finding]",
@@ -237,6 +251,47 @@
       "_normalize": 1,
       "available": 1,
       "metadata": 5
+    },
+    "src/aedificatoria/cfamily.py": {
+      "_add_aggregate": 3,
+      "_add_function": 2,
+      "_assertions": 4,
+      "_branches": 7,
+      "_call_name": 4,
+      "_class_members": 12,
+      "_collect_scores": 12,
+      "_collect_tests": 13,
+      "_component": 11,
+      "_declarations": 8,
+      "_declarations_one": 6,
+      "_error_count": 3,
+      "_field": 2,
+      "_files": 8,
+      "_first_string": 4,
+      "_function_signature": 1,
+      "_gtest_title": 5,
+      "_includes": 6,
+      "_is_static": 4,
+      "_linkage_declarations": 2,
+      "_local_components": 3,
+      "_name": 4,
+      "_namespace_declarations": 3,
+      "_norm": 1,
+      "_parse": 1,
+      "_target_file": 3,
+      "_template_declarations": 3,
+      "_test_call": 5,
+      "_text": 3,
+      "_typedef_declaration": 6,
+      "complexity": 2,
+      "declared_dependencies": 1,
+      "is_stdlib": 1,
+      "local_packages": 1,
+      "package_edges": 9,
+      "parse_text": 9,
+      "project_imports": 7,
+      "public_api": 3,
+      "test_info": 2
     },
     "src/aedificatoria/checks.py": {
       "_adr_changes": 8,
@@ -596,6 +651,8 @@
   },
   "dependencies": [
     "tree_sitter",
+    "tree_sitter_c",
+    "tree_sitter_cpp",
     "tree_sitter_javascript",
     "tree_sitter_rust",
     "tree_sitter_typescript"
@@ -603,6 +660,9 @@
   "edges": [],
   "test_cases": {},
   "tests": {
+    "src/aedificatoria/cfamily.py": {
+      "test_info": 0
+    },
     "src/aedificatoria/jsts.py": {
       "test_info": 0
     },
@@ -632,6 +692,17 @@
       "test_file_fact_cache_is_content_keyed": 2,
       "test_incremental_update_matches_full_collect": 1,
       "test_index_cache_cleared_between_collects": 2
+    },
+    "tests/test_cfamily.py": {
+      "test_c_header_api_excludes_static_and_includes_struct_fields": 6,
+      "test_c_public_api_break": 1,
+      "test_cpp_complexity": 2,
+      "test_cpp_external_include_is_new_dependency": 1,
+      "test_cpp_namespace_class_public_api": 6,
+      "test_cpp_test_assertion_removal": 1,
+      "test_gtest_and_catch_test_inventory": 4,
+      "test_include_component_graph_and_external_dependency": 4,
+      "test_malformed_cpp_does_not_crash": 4
     },
     "tests/test_checks.py": {
       "test_adr_quality_and_test_config": 2,

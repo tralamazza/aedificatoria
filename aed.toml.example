@@ -27,14 +27,16 @@ source_roots = ["src", "."]
 #   "tests/**", "**/tests/**", "**/test_*.py", "**/*_test.py",
 #   "**/*_test.rs", "**/*_tests.rs", "**/*.test.*", "**/*.spec.*",
 #   "**/__tests__/**", "**/__test__/**",
+#   "**/test_*.c", "**/*_test.c", "**/test_*.cc", "**/*_test.cc",
+#   "**/test_*.cpp", "**/*_test.cpp", "**/test_*.cxx", "**/*_test.cxx",
 # ]
 # test_config_paths = [
 #   "conftest.py", "**/conftest.py", "pytest.ini", "tox.ini", "setup.cfg",
 #   ".coveragerc", "**/jest.config.*", "**/vitest.config.*", "**/.mocharc.*",
 #   "**/karma.conf.*", "**/playwright.config.*", "**/cypress.config.*",
-#   "**/jest.setup.*", "**/vitest.setup.*",
+#   "**/jest.setup.*", "**/vitest.setup.*", "**/CTestTestfile.cmake",
 # ]
-# api_paths = ["**/*.py", "**/*.rs", "**/*.js", "**/*.jsx", "**/*.ts", "**/*.tsx", "**/*.mjs", "**/*.cjs", "**/*.mts", "**/*.cts"]
+# api_paths = ["**/*.py", "**/*.rs", "**/*.js", "**/*.jsx", "**/*.ts", "**/*.tsx", "**/*.mjs", "**/*.cjs", "**/*.mts", "**/*.cts", "**/*.h", "**/*.hpp", "**/*.hh", "**/*.hxx", "**/*.ixx"]
 # metric_excludes = ["docs/**", "examples/**", "benchmarks/**"]
 # allow_new_dependencies = []
 baseline_path = "aed-baseline.json"

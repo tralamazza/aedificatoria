@@ -21,7 +21,7 @@ source_roots = ["src", "."]
 # ]
 # api_paths = ["**/*.py", "**/*.rs", "**/*.js", "**/*.jsx", "**/*.ts", "**/*.tsx", "**/*.mjs", "**/*.cjs", "**/*.mts", "**/*.cts"]
 metric_excludes = ["docs/**", "examples/**", "benchmarks/**"]
-allow_new_dependencies = ["tree_sitter", "tree_sitter_javascript", "tree_sitter_rust", "tree_sitter_typescript"]
+allow_new_dependencies = ["tree_sitter", "tree_sitter_c", "tree_sitter_cpp", "tree_sitter_javascript", "tree_sitter_rust", "tree_sitter_typescript"]
 baseline_path = "aed-baseline.json"
 cargo_advisory = true
 require_adr_for_large_change = true
