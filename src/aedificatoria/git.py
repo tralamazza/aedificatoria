@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 import shutil
 import subprocess
@@ -9,6 +10,11 @@ import tempfile
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Generator
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - non-POSIX fallback
+    fcntl = None
 
 from .config import Config
 from .model import ChangedFile
@@ -308,16 +314,32 @@ def index_tree(repo: Path) -> Generator[Path, None, None]:
 
 
 @contextmanager
+def _worktree_lock(repo: Path) -> Generator[None, None, None]:
+    if fcntl is None:
+        yield
+        return
+    digest = hashlib.sha1(str(repo.resolve()).encode("utf-8")).hexdigest()[:16]
+    lock_path = Path(tempfile.gettempdir()) / f"aed-worktree-{digest}.lock"
+    with lock_path.open("a") as handle:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
+@contextmanager
 def base_worktree(repo: Path, commit: str) -> Generator[Path, None, None]:
     """Create a detached worktree of `commit`; remove it on exit."""
     tmp_root = Path(tempfile.mkdtemp(prefix="aed-base-"))
     tree = tmp_root / f"tree-{tmp_root.name}"
-    proc = subprocess.run(
-        ["git", "-C", str(repo), "worktree", "add", "--detach", "--force", str(tree), commit],
-        capture_output=True,
-        check=False,
-        env=_clean_env(),
-    )
+    with _worktree_lock(repo):
+        proc = subprocess.run(
+            ["git", "-C", str(repo), "worktree", "add", "--detach", "--force", str(tree), commit],
+            capture_output=True,
+            check=False,
+            env=_clean_env(),
+        )
     if proc.returncode != 0:
         shutil.rmtree(tmp_root, ignore_errors=True)
         detail = proc.stderr.decode("utf-8", "replace").strip()
@@ -325,12 +347,13 @@ def base_worktree(repo: Path, commit: str) -> Generator[Path, None, None]:
     try:
         yield tree
     finally:
-        subprocess.run(
-            ["git", "-C", str(repo), "worktree", "remove", "--force", str(tree)],
-            capture_output=True,
-            check=False,
-            env=_clean_env(),
-        )
+        with _worktree_lock(repo):
+            subprocess.run(
+                ["git", "-C", str(repo), "worktree", "remove", "--force", str(tree)],
+                capture_output=True,
+                check=False,
+                env=_clean_env(),
+            )
         shutil.rmtree(tmp_root, ignore_errors=True)
 
 

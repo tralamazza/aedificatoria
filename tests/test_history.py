@@ -9,7 +9,7 @@ from pathlib import Path
 from aedificatoria import history
 from aedificatoria.cli import main
 from aedificatoria.config import Config
-from aedificatoria.git import base_worktree, merge_edited_files
+from aedificatoria.git import _worktree_lock, base_worktree, merge_edited_files
 
 
 def test_history_detects_complexity_regression(repo: Path, commit, write):
@@ -51,12 +51,27 @@ def test_history_detects_new_cycle(repo: Path, commit, write):
     assert any("new package cycle" in item.message for item in points[-1].regressions)
 
 
+def test_worktree_lock_is_exclusive(repo: Path):
+    events: list[str] = []
+
+    def work(index: int) -> None:
+        with _worktree_lock(repo):
+            events.append(f"start-{index}")
+            events.append(f"end-{index}")
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        list(pool.map(work, range(4)))
+    for index in range(0, len(events), 2):
+        assert events[index].startswith("start-")
+        assert events[index + 1] == events[index].replace("start-", "end-")
+
+
 def test_base_worktrees_have_unique_names(repo: Path, commit, write):
     write(repo, "app.py", "value = 1\n")
     commit(repo)
     barrier = threading.Barrier(8)
 
-    def work(_index: int) -> str:
+    def work(_: int) -> str:
         with base_worktree(repo, "HEAD") as tree:
             assert (tree / "app.py").is_file()
             barrier.wait(timeout=20)

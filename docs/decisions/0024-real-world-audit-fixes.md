@@ -3,6 +3,8 @@
 - Status: accepted
 - Date: 2026-11-27
 
+- Amended by: 0025 (serialize worktree administration)
+
 ## Context
 
 A first real-world pass over Click (Python), anyhow (Rust), p-queue

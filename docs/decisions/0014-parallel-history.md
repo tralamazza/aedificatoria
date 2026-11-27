@@ -2,7 +2,7 @@
 
 - Status: accepted
 - Date: 2026-11-27
-- Amended by: 0024 (unique worktree basenames)
+- Amended by: 0024 (unique worktree basenames); 0025 (serialize worktree admin)
 
 ## Context
 
