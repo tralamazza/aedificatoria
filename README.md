@@ -163,9 +163,12 @@ committed. `--no-verify` bypasses the local hook; CI is authoritative. See
 | JS/TS | tree-sitter | ES/TS exports, CJS exports, methods | `test`/`it`/`describe`, `.skip`/`.only` | imports, `require`, `package.json` |
 
 Adapters live in `languages.py`; rule code is language-neutral. Rust/JS/TS is
-AST-level: no macro expansion, type checking, tsconfig aliases, or `.each`
-tables. With cargo installed and a root `Cargo.toml`, `aed check` adds
-`cargo-advisory` info findings from `cargo metadata --no-deps --offline`.
+AST-level: no macro expansion, type checking, or `.each` tables. JS/TS resolves
+nearest `tsconfig.json`/`jsconfig.json` `baseUrl`/`paths` aliases, including
+local `extends`; package-manager `extends` and unresolved aliases fall back to
+external classification. With cargo installed and a root `Cargo.toml`,
+`aed check` adds `cargo-advisory` info findings from
+`cargo metadata --no-deps --offline`.
 
 ## Limitations
 

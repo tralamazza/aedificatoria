@@ -683,13 +683,15 @@ def _module_root(specifier: str) -> str:
     return value.split("/")[0]
 
 
-def imports(tree: JsFile) -> list[ImportRef]:
+def _imports(tree: JsFile, resolver=None) -> list[ImportRef]:
     specs: list[tuple[str, int]] = []
     _collect_import_specs(tree.tree.root_node, specs)
     refs: list[ImportRef] = []
     seen: set[str] = set()
     for specifier, line in specs:
-        module = _module_root(specifier)
+        module = resolver(specifier) if resolver is not None else None
+        if module is None:
+            module = _module_root(specifier)
         if not module or module in seen:
             continue
         seen.add(module)
@@ -697,13 +699,18 @@ def imports(tree: JsFile) -> list[ImportRef]:
     return refs
 
 
+def imports(tree: JsFile) -> list[ImportRef]:
+    return _imports(tree)
+
+
 def is_stdlib(module: str) -> bool:
     return module.startswith("node:") or module in STDLIB
 
 
-def _repo_files(root: Path) -> tuple[list[str], list[str]]:
+def _repo_files(root: Path) -> tuple[list[str], list[str], list[str]]:
     manifests: list[str] = []
     sources: list[str] = []
+    configs: list[str] = []
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = sorted(name for name in dirnames if name not in _SKIP_DIRS)
         relative = os.path.relpath(dirpath, root)
@@ -712,9 +719,11 @@ def _repo_files(root: Path) -> tuple[list[str], list[str]]:
             rel = f"{relative}/{name}" if relative else name
             if name == "package.json":
                 manifests.append(rel)
+            elif name in {"tsconfig.json", "jsconfig.json"}:
+                configs.append(rel)
             elif name.endswith(EXTENSIONS):
                 sources.append(rel)
-    return manifests, sources
+    return manifests, sources, configs
 
 
 def _read_package(root: Path, rel: str) -> tuple[str, dict[str, tuple[str, int]]] | None:
@@ -737,6 +746,170 @@ def _read_package(root: Path, rel: str) -> tuple[str, dict[str, tuple[str, int]]
     return name, deps
 
 
+@dataclass(frozen=True)
+class _TsConfig:
+    base_url: str
+    paths: tuple[tuple[str, tuple[str, ...]], ...]
+
+
+def _strip_comments(text: str) -> str:
+    """Remove // and /* */ comments outside strings."""
+    result: list[str] = []
+    index = 0
+    in_string = False
+    escaped = False
+    while index < len(text):
+        char = text[index]
+        if in_string:
+            result.append(char)
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            index += 1
+            continue
+        if char == '"':
+            in_string = True
+            result.append(char)
+            index += 1
+            continue
+        if text.startswith("//", index):
+            end = text.find("\n", index)
+            index = len(text) if end < 0 else end
+            continue
+        if text.startswith("/*", index):
+            end = text.find("*/", index + 2)
+            index = len(text) if end < 0 else end + 2
+            continue
+        result.append(char)
+        index += 1
+    return "".join(result)
+
+
+def _strip_trailing_commas(text: str) -> str:
+    """Remove commas before } or ] outside strings."""
+    result: list[str] = []
+    index = 0
+    in_string = False
+    escaped = False
+    while index < len(text):
+        char = text[index]
+        if in_string:
+            result.append(char)
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            index += 1
+            continue
+        if char == '"':
+            in_string = True
+            result.append(char)
+            index += 1
+            continue
+        if char == ",":
+            look = index + 1
+            while look < len(text) and text[look].isspace():
+                look += 1
+            if look < len(text) and text[look] in "}]":
+                index += 1
+                continue
+        result.append(char)
+        index += 1
+    return "".join(result)
+
+
+def _strip_jsonc(text: str) -> str:
+    """Strip comments and trailing commas outside strings."""
+    return _strip_trailing_commas(_strip_comments(text))
+
+
+def _load_jsonc(path: Path) -> dict[str, object] | None:
+    try:
+        data = json.loads(_strip_jsonc(path.read_text(encoding="utf-8")))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _extends_path(root: Path, current: str, value: object) -> str | None:
+    if not isinstance(value, str) or not value.startswith((".", "/")):
+        return None
+    base = (root / current).parent
+    candidate = (base / value).resolve()
+    if not candidate.is_relative_to(root.resolve()):
+        return None
+    choices = [candidate]
+    if candidate.suffix == "":
+        choices.extend([Path(str(candidate) + ".json"), candidate / "tsconfig.json"])
+    for choice in choices:
+        if choice.is_file() and choice.is_relative_to(root.resolve()):
+            return choice.relative_to(root.resolve()).as_posix()
+    return None
+
+
+def _inherited_tsconfig(
+    root: Path,
+    rel: str,
+    data: dict[str, object],
+    seen: set[str],
+) -> _TsConfig | None:
+    inherited: _TsConfig | None = None
+    extends = data.get("extends")
+    values = extends if isinstance(extends, list) else [extends]
+    for value in values:
+        parent_rel = _extends_path(root, rel, value)
+        if parent_rel is None:
+            continue
+        parent = _read_tsconfig(root, parent_rel, seen)
+        if parent is not None:
+            inherited = parent
+    return inherited
+
+
+def _path_mapping(
+    compiler: dict[str, object],
+    inherited: _TsConfig | None,
+) -> tuple[tuple[str, tuple[str, ...]], ...]:
+    paths = inherited.paths if inherited is not None else ()
+    raw_paths = compiler.get("paths")
+    if not isinstance(raw_paths, dict):
+        return paths
+    parsed: list[tuple[str, tuple[str, ...]]] = []
+    for pattern, targets in raw_paths.items():
+        if not isinstance(targets, list):
+            continue
+        values = tuple(target for target in targets if isinstance(target, str) and target)
+        if values:
+            parsed.append((str(pattern), values))
+    return tuple(parsed)
+
+
+def _read_tsconfig(root: Path, rel: str, seen: set[str] | None = None) -> _TsConfig | None:
+    seen = set() if seen is None else seen
+    if rel in seen:
+        return None
+    seen.add(rel)
+    data = _load_jsonc(root / rel)
+    if data is None:
+        return None
+
+    inherited = _inherited_tsconfig(root, rel, data, seen)
+    config_dir = posixpath.dirname(rel) or "."
+    compiler = data.get("compilerOptions")
+    compiler = compiler if isinstance(compiler, dict) else {}
+    base_url = inherited.base_url if inherited is not None else config_dir
+    raw_base = compiler.get("baseUrl")
+    if isinstance(raw_base, str) and raw_base:
+        base_url = posixpath.normpath(posixpath.join(config_dir, raw_base))
+    return _TsConfig(base_url=base_url, paths=_path_mapping(compiler, inherited))
+
+
+
 class RepoIndex:
     """npm package names, declared dependencies, and parsed sources."""
 
@@ -745,10 +918,11 @@ class RepoIndex:
         self.packages: dict[str, str] = {}
         self.deps: dict[str, tuple[str, int]] = {}
         self.files: dict[str, JsFile] = {}
+        self.tsconfigs: dict[str, _TsConfig] = {}
         self._scan()
 
     def _scan(self) -> None:
-        manifests, sources = _repo_files(self.root)
+        manifests, sources, configs = _repo_files(self.root)
         for rel in manifests:
             facts = _read_package(self.root, rel)
             if facts is None:
@@ -757,6 +931,10 @@ class RepoIndex:
             self.packages[posixpath.dirname(rel)] = name
             for dependency, site in deps.items():
                 self.deps.setdefault(dependency, site)
+        for rel in configs:
+            config = _read_tsconfig(self.root, rel)
+            if config is not None:
+                self.tsconfigs[posixpath.dirname(rel)] = config
         for rel in sources:
             try:
                 text = (self.root / rel).read_text(encoding="utf-8")
@@ -776,6 +954,66 @@ class RepoIndex:
                 return ""
             directory = posixpath.dirname(directory)
 
+    def _nearest_tsconfig(self, rel: str) -> _TsConfig | None:
+        directory = posixpath.dirname(rel)
+        while True:
+            config = self.tsconfigs.get(directory)
+            if config is not None:
+                return config
+            if not directory:
+                return None
+            directory = posixpath.dirname(directory)
+
+    def _resolve_alias(self, rel: str, specifier: str) -> str | None:
+        value = specifier.strip()
+        if not value or value.startswith((".", "/", "#")) or value.startswith("node:"):
+            return None
+        config = self._nearest_tsconfig(rel)
+        if config is None or not config.paths:
+            return None
+
+        matched = _match_alias(config, value)
+        if matched is None:
+            return None
+        targets, wildcard = matched
+        for target in targets:
+            resolved = _alias_target(config, target, wildcard)
+            if resolved is None:
+                continue
+            package = self.package_of(resolved)
+            return package if package else ""
+        return None
+
+
+def _match_alias(
+    config: _TsConfig,
+    value: str,
+) -> tuple[tuple[str, ...], str] | None:
+    matches: list[tuple[int, tuple[str, ...], str]] = []
+    for pattern, targets in config.paths:
+        if "*" not in pattern:
+            if value == pattern:
+                matches.append((len(pattern), targets, ""))
+            continue
+        prefix, suffix = pattern.split("*", 1)
+        if not value.startswith(prefix) or not value.endswith(suffix):
+            continue
+        end = len(value) - len(suffix) if suffix else len(value)
+        matches.append((len(prefix), targets, value[len(prefix) : end]))
+    if not matches:
+        return None
+    _, targets, wildcard = max(matches, key=lambda item: item[0])
+    return targets, wildcard
+
+
+def _alias_target(config: _TsConfig, target: str, wildcard: str) -> str | None:
+    resolved = posixpath.normpath(
+        posixpath.join(config.base_url, target.replace("*", wildcard))
+    )
+    if resolved == ".." or resolved.startswith(("../", "/")):
+        return None
+    return resolved
+
 
 def package_edges(root: Path, config: Config) -> tuple[set[tuple[str, str]], set[str]]:
     index = RepoIndex(root)
@@ -787,7 +1025,7 @@ def package_edges(root: Path, config: Config) -> tuple[set[tuple[str, str]], set
         package = index.package_of(rel)
         if not package:
             continue
-        for ref in imports(tree):
+        for ref in _imports(tree, lambda spec: index._resolve_alias(rel, spec)):
             if ref.module in packages and ref.module != package:
                 edges.add((package, ref.module))
     return edges, packages
@@ -799,7 +1037,7 @@ def project_imports(root: Path, config: Config) -> dict[str, tuple[str, int]]:
     for rel, tree in index.files.items():
         if config.is_excluded(rel) or config.is_test(rel):
             continue
-        for ref in imports(tree):
+        for ref in _imports(tree, lambda spec: index._resolve_alias(rel, spec)):
             if ref.level != 0 or not ref.module:
                 continue
             found.setdefault(ref.module, (rel, ref.line))

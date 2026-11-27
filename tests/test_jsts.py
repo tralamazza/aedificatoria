@@ -233,6 +233,86 @@ def test_js_package_dependency_allowlist(repo: Path, commit, write):
     assert not any(item.rule == "new-dependency" for item in findings)
 
 
+def test_tsconfig_root_alias_is_local_dependency(repo: Path, commit, write):
+    write(repo, "package.json", package("app"))
+    write(repo, "src/util.ts", "export const value = 1;\n")
+    write(repo, "src/lib.ts", "export const a = 1;\n")
+    write(
+        repo,
+        "tsconfig.json",
+        """
+{
+  // JSONC is valid for tsconfig.
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+    },
+  },
+}
+""",
+    )
+    commit(repo)
+    write(repo, "src/lib.ts", "import { value } from '@/util';\nexport const a = value;\n")
+
+    findings = evaluate(repo, Config())
+    assert not any(item.rule == "new-dependency" for item in findings)
+
+
+def test_tsconfig_extends_alias_is_local_dependency(repo: Path, commit, write):
+    write(repo, "package.json", package("app"))
+    write(
+        repo,
+        "tsconfig.base.json",
+        '{"compilerOptions": {"baseUrl": ".", "paths": {"@app/*": ["src/*"]}}}\n',
+    )
+    write(repo, "tsconfig.json", '{"extends": "./tsconfig.base.json"}\n')
+    write(repo, "src/helper.ts", "export const value = 1;\n")
+    write(repo, "src/lib.ts", "export const a = 1;\n")
+    commit(repo)
+    write(repo, "src/lib.ts", "import { value } from '@app/helper';\nexport const a = value;\n")
+
+    findings = evaluate(repo, Config())
+    assert not any(item.rule == "new-dependency" for item in findings)
+
+
+def test_tsconfig_alias_maps_workspace_forbidden_edge(repo: Path, commit, write):
+    write(repo, "package.json", package("root"))
+    write(repo, "packages/a/package.json", package("@acme/a"))
+    write(repo, "packages/b/package.json", package("@acme/b"))
+    write(
+        repo,
+        "tsconfig.json",
+        '{"compilerOptions": {"baseUrl": ".", "paths": {"@acme/*": ["packages/*/src"]}}}\n',
+    )
+    write(repo, "packages/a/src/index.ts", "export const a = 1;\n")
+    write(repo, "packages/b/src/index.ts", "export const b = 1;\n")
+    commit(repo)
+    write(repo, "packages/a/src/index.ts", "import { b } from '@acme/b';\nexport const a = b;\n")
+
+    findings = evaluate(
+        repo,
+        Config(forbidden_edges=(ForbiddenEdge("@acme/a", "@acme/b", "a must not depend on b"),)),
+    )
+    assert any(item.rule == "forbidden-edge" and "@acme/a -> @acme/b" in item.message for item in findings)
+    assert not any(item.rule == "new-dependency" for item in findings)
+
+
+def test_tsconfig_unmatched_alias_remains_external(repo: Path, commit, write):
+    write(repo, "package.json", package("app"))
+    write(
+        repo,
+        "tsconfig.json",
+        '{"compilerOptions": {"baseUrl": ".", "paths": {"@/*": ["src/*"]}}}\n',
+    )
+    write(repo, "src/lib.ts", "export const a = 1;\n")
+    commit(repo)
+    write(repo, "src/lib.ts", "import x from '@other/pkg';\nexport const a = x;\n")
+
+    findings = evaluate(repo, Config())
+    assert any(item.rule == "new-dependency" and "@other/pkg" in item.message for item in findings)
+
+
 def test_js_import_dependency_and_builtins(repo: Path, commit, write):
     write(repo, "package.json", package("app"))
     write(repo, "src/lib.ts", "export const a = 1;\n")
