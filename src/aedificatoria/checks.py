@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import re
 from collections import Counter
+from dataclasses import asdict
 
 from . import cargo, languages
-from .config import Config
+from .config import Config, load_config
 from .model import SEVERITY_RANK, ChangedFile, Context, Finding, TestInfo
 from .pyast import cycle_evidence, strongly_connected
 
@@ -201,8 +202,25 @@ def _weakened_test_findings(
             )
         )
 
+    per_test: list[Finding] = []
+    if ctx.config.block_removed_asserts:
+        for name in sorted(base_info.functions & head_info.functions):
+            before = base_info.counts.get(name, 0)
+            after = head_info.counts.get(name, 0)
+            if before > after:
+                per_test.append(
+                    Finding(
+                        "test-tampering",
+                        "error",
+                        f"test `{name}` assertions decreased from {before} to {after}",
+                        path=item.path,
+                        evidence="Assertions cannot be moved to other tests to hide a weakened test.",
+                    )
+                )
+    findings.extend(per_test)
+
     dropped = base_info.assertions - head_info.assertions
-    if dropped > 0 and ctx.config.block_removed_asserts:
+    if dropped > 0 and ctx.config.block_removed_asserts and not per_test:
         findings.append(
             Finding(
                 "test-tampering",
@@ -235,6 +253,50 @@ def _weakened_test_findings(
             )
         )
     return findings
+
+
+_GUARD_CONFIG_IGNORED = frozenset({"cargo_advisory"})
+
+
+def _config_policy(config: Config) -> dict[str, object]:
+    data = asdict(config)
+    return {name: value for name, value in data.items() if name not in _GUARD_CONFIG_IGNORED}
+
+
+def check_guard_config(ctx: Context) -> list[Finding]:
+    base_policy = _config_policy(load_config(ctx.base_dir, ctx.config_path))
+    head_policy = _config_policy(load_config(ctx.repo, ctx.config_path))
+    changed = sorted(name for name in base_policy if base_policy[name] != head_policy.get(name))
+    if not changed:
+        return []
+
+    detail = ", ".join(changed[:8])
+    if len(changed) > 8:
+        detail += f", +{len(changed) - 8} more"
+    valid_adrs = [item for item in _adr_changes(ctx) if _adr_valid(ctx, item)[0]]
+    evidence = (
+        "The verifier configuration is part of the guard: thresholds, allowlists, "
+        "excludes, test/API paths, and one-way doors require an accepted ADR."
+    )
+    if valid_adrs:
+        return [
+            Finding(
+                "guard-config",
+                "warn",
+                f"verifier configuration changed ({detail}); justified by {valid_adrs[0].path}",
+                path=ctx.config_path,
+                evidence=evidence,
+            )
+        ]
+    return [
+        Finding(
+            "guard-config",
+            "error",
+            f"verifier configuration changed ({detail}) without an ADR",
+            path=ctx.config_path,
+            evidence=evidence,
+        )
+    ]
 
 
 def check_test_tampering(ctx: Context) -> list[Finding]:
@@ -547,6 +609,7 @@ def run_checks(ctx: Context) -> list[Finding]:
     findings: list[Finding] = []
     for check in (
         check_change_amplification,
+        check_guard_config,
         check_one_way_doors,
         check_test_tampering,
         check_import_graph,

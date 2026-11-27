@@ -31,7 +31,8 @@ trees. Exit code `2` means block; `0` means allow or review.
 | Rule | What it catches |
 |---|---|
 | `one-way-door` | Changes under migrations, schema, API, auth, `.proto`, OpenAPI require an ADR with a title, status, and `## Decision`. |
-| `test-tampering` | Deleted tests, removed assertions, new `skip`/`xfail`, or deleted test configuration. |
+| `test-tampering` | Deleted tests, per-test or total assertion drops, new `skip`/`xfail`/`.only`, or deleted test configuration. |
+| `guard-config` | An effective `aed.toml` change (thresholds, allowlists, excludes, paths, doors) without an ADR. |
 | `import-cycle` | New top-level package cycles. |
 | `forbidden-edge` | New dependency edges listed in `[[aed.forbidden_edges]]`. |
 | `complexity` | A function crosses the complexity limit, or increases by more than the ratchet delta. |
@@ -103,7 +104,10 @@ complexity_delta = 5
 ```
 
 One-way-door paths, test paths, API paths, and excludes are configurable; see
-[`aed.toml.example`](aed.toml.example).
+[`aed.toml.example`](aed.toml.example). The configuration is the verifier's
+control plane: any effective change to `aed.toml` requires an ADR in the same
+diff, so a one-line threshold, allowlist, exclude, or door change cannot silently
+disable a check.
 
 ## Agent integration
 
@@ -161,6 +165,10 @@ the change. Hidden tests should still live outside the agent's writable tree.
   crates); module-level cycles inside one package or crate are not reported.
 - `aed check` compares the working tree to a base commit, not the staged index.
   A staged-only mode is planned.
+- The guard is per-diff. An ADR-authorized configuration weakening still exits 0,
+  replacing an assertion with a weaker one while keeping the count is semantic
+  and not detected, and cumulative drift across many small commits is not
+  budgeted.
 - The guard is deterministic. It does not judge whether an ADR is *good*, only
   whether a decision was recorded and the mechanical constraints hold.
 

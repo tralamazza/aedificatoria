@@ -590,26 +590,35 @@ def _collect_tests(
     inherited_skip: bool,
     functions: set[str],
     skips: set[str],
+    counts: dict[str, int],
 ) -> None:
     for child in node.named_children:
         if child.type != "call_expression":
-            _collect_tests(child, prefix, inherited_skip, functions, skips)
+            _collect_tests(child, prefix, inherited_skip, functions, skips, counts)
             continue
         call = _test_call(child)
         if call is None:
-            _collect_tests(child, prefix, inherited_skip, functions, skips)
+            _collect_tests(child, prefix, inherited_skip, functions, skips, counts)
             continue
         verb, title, skip, callback = call
         if verb == "describe":
             next_prefix = f"{prefix}{title} > " if title else prefix
             body = _field(callback, "body")
             if body is not None:
-                _collect_tests(body, next_prefix, inherited_skip or skip, functions, skips)
+                _collect_tests(
+                    body,
+                    next_prefix,
+                    inherited_skip or skip,
+                    functions,
+                    skips,
+                    counts,
+                )
             continue
         if not title:
             continue
         name = f"{prefix}{title}"
         functions.add(name)
+        counts[name] = _count_assertions(callback) if callback is not None else 0
         if inherited_skip or skip:
             skips.add(name)
 
@@ -630,9 +639,10 @@ def test_info(tree: JsFile | None) -> TestInfo:
         return TestInfo(frozenset(), 0, frozenset())
     functions: set[str] = set()
     skips: set[str] = set()
-    _collect_tests(tree.tree.root_node, "", False, functions, skips)
+    counts: dict[str, int] = {}
+    _collect_tests(tree.tree.root_node, "", False, functions, skips, counts)
     assertions = _count_assertions(tree.tree.root_node)
-    return TestInfo(frozenset(functions), assertions, frozenset(skips))
+    return TestInfo(frozenset(functions), assertions, frozenset(skips), counts)
 
 
 def _first_string(arguments: Node | None) -> str:

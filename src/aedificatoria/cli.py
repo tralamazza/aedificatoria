@@ -61,6 +61,7 @@ def cmd_check(args: argparse.Namespace) -> int:
     base_ref = args.base or config.base
     commit = resolve_commit(repo, base_ref)
     changed = changed_files(repo, commit)
+    config_path = args.config or "aed.toml"
     with base_worktree(repo, commit) as base_dir:
         context = Context(
             repo=repo,
@@ -69,6 +70,7 @@ def cmd_check(args: argparse.Namespace) -> int:
             base_dir=base_dir,
             changed=changed,
             config=config,
+            config_path=config_path,
         )
         findings = run_checks(context)
 

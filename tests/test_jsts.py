@@ -97,6 +97,7 @@ describe("math", () => {
     info = jsts.test_info(tree)
     assert info.functions == frozenset({"math > adds", "math > subs"})
     assert info.assertions == 2
+    assert info.counts == {"math > adds": 1, "math > subs": 1}
     assert info.skips == frozenset({"math > adds"})
     assert [(ref.module, ref.level) for ref in jsts.imports(tree)] == [("pkg", 0), ("legacy", 0)]
 

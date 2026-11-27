@@ -97,6 +97,7 @@ def test_rust_source_analysis():
     info = rust.test_info(tree)
     assert info.functions == frozenset({"tests::renders"})
     assert info.assertions == 2
+    assert info.counts == {"tests::renders": 2}
     assert info.skips == frozenset()
 
 

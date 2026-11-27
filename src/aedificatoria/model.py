@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -49,6 +49,7 @@ class TestInfo:
     functions: frozenset[str]
     assertions: int
     skips: frozenset[str]
+    counts: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -85,6 +86,7 @@ class Context:
     base_dir: Path
     changed: list[ChangedFile]
     config: "Config"
+    config_path: str = "aed.toml"
 
     def _safe_join(self, root: Path, path: str) -> Path | None:
         candidate = (root / path).resolve()

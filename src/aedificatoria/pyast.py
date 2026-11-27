@@ -267,20 +267,35 @@ def _walk_assertions(tree: ast.Module, skips: set[str]) -> int:
     return assertions
 
 
+def _assertion_count(node: ast.AST) -> int:
+    total = 0
+    for child in ast.walk(node):
+        if isinstance(child, ast.Assert):
+            total += 1
+        elif isinstance(child, ast.Call) and _call_assertion(child):
+            total += 1
+    return total
+
+
 def _collect_tests(
-    body: list[ast.stmt], prefix: str, functions: set[str], skips: set[str]
+    body: list[ast.stmt],
+    prefix: str,
+    functions: set[str],
+    skips: set[str],
+    counts: dict[str, int],
 ) -> None:
     for node in body:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name.startswith("test_"):
             name = f"{prefix}{node.name}"
             functions.add(name)
+            counts[name] = _assertion_count(node)
             if _has_skip(node.decorator_list):
                 skips.add(name)
         elif isinstance(node, ast.ClassDef):
             class_name = f"{prefix}{node.name}"
             if _has_skip(node.decorator_list):
                 skips.add(class_name)
-            _collect_tests(node.body, class_name + ".", functions, skips)
+            _collect_tests(node.body, class_name + ".", functions, skips, counts)
 
 
 def _module_marker_skips(tree: ast.Module, skips: set[str]) -> None:
@@ -300,10 +315,11 @@ def test_info(tree: ast.Module | None) -> TestInfo:
         return TestInfo(frozenset(), 0, frozenset())
     functions: set[str] = set()
     skips: set[str] = set()
+    counts: dict[str, int] = {}
     assertions = _walk_assertions(tree, skips)
-    _collect_tests(tree.body, "", functions, skips)
+    _collect_tests(tree.body, "", functions, skips, counts)
     _module_marker_skips(tree, skips)
-    return TestInfo(frozenset(functions), assertions, frozenset(skips))
+    return TestInfo(frozenset(functions), assertions, frozenset(skips), counts)
 
 
 def declared_dependencies(_root: Path, _config: Config) -> dict[str, tuple[str, int]]:

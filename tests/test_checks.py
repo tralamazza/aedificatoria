@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from aedificatoria.checks import run_checks as run_all_checks
-from aedificatoria.config import Config, ForbiddenEdge, matches
+from aedificatoria.config import Config, ForbiddenEdge, load_config, matches
 from aedificatoria.git import base_worktree, changed_files, resolve_commit
 from aedificatoria.model import Context
 
@@ -197,6 +197,51 @@ def test_load_config_thresholds(tmp_path: Path):
     assert config.max_changed_lines == 40
     assert config.max_complexity == 7
     assert config.complexity_delta == 2
+
+
+def test_guard_config_change_requires_adr(repo: Path, commit, write):
+    write(repo, "aed.toml", "[aed]\nblock_removed_tests = true\n")
+    write(repo, "tests/test_math.py", "def test_a():\n    assert 1 == 1\n")
+    commit(repo)
+
+    write(repo, "aed.toml", "[aed]\nblock_removed_tests = false\n")
+    (repo / "tests" / "test_math.py").unlink()
+    findings = evaluate(repo, load_config(repo))
+    assert any(item.rule == "guard-config" and item.severity == "error" for item in findings)
+    assert not any(item.rule == "test-tampering" for item in findings)
+
+    write(
+        repo,
+        "docs/decisions/0002-disable-test-guard.md",
+        "# 0002. Disable test guard\n\n- Status: accepted\n\n## Decision\n\nDisable for one migration.\n",
+    )
+    findings = evaluate(repo, load_config(repo))
+    assert any(item.rule == "guard-config" and item.severity == "warn" for item in findings)
+
+
+def test_guard_config_allowlist_bypass_requires_adr(repo: Path, commit, write):
+    write(repo, "aed.toml", "[aed]\n")
+    write(repo, "main.py", "import os\n")
+    commit(repo)
+
+    write(repo, "aed.toml", '[aed]\nallow_new_dependencies = ["requests"]\n')
+    write(repo, "main.py", "import os\nimport requests\n")
+    findings = evaluate(repo, load_config(repo))
+    assert not any(item.rule == "new-dependency" for item in findings)
+    assert any(item.rule == "guard-config" and item.severity == "error" for item in findings)
+
+
+def test_assertion_movement_between_tests_is_blocked(repo: Path, commit, write):
+    base = "def test_a():\n    assert 1 == 1\n    assert 2 == 2\n\ndef test_b():\n    assert 3 == 3\n"
+    head = "def test_a():\n    assert 1 == 1\n\ndef test_b():\n    assert 3 == 3\n    assert 4 == 4\n"
+    write(repo, "tests/test_math.py", base)
+    commit(repo)
+    write(repo, "tests/test_math.py", head)
+
+    findings = evaluate(repo, Config())
+    messages = [item.message for item in findings if item.rule == "test-tampering"]
+    assert any("test `test_a` assertions decreased from 2 to 1" in message for message in messages)
+    assert not any(message.startswith("test assertions decreased") for message in messages)
 
 
 def test_check_ignores_hook_git_environment(repo: Path, commit, write, monkeypatch):

@@ -374,7 +374,7 @@ def _collect_tests(
     inherited_skip: bool,
     functions: set[str],
     skips: set[str],
-    nodes: list[Node],
+    nodes: list[tuple[str, Node]],
 ) -> None:
     attributes: list[str] = []
     for child in container.named_children:
@@ -389,7 +389,7 @@ def _collect_tests(
                     functions.add(key)
                     if inherited_skip or any(_is_ignore_attr(attr) for attr in attributes):
                         skips.add(key)
-                    nodes.append(child)
+                    nodes.append((key, child))
             attributes = []
             continue
         if child.type == "mod_item":
@@ -418,10 +418,10 @@ def test_info(tree: RustFile | None) -> TestInfo:
         return TestInfo(frozenset(), 0, frozenset())
     functions: set[str] = set()
     skips: set[str] = set()
-    nodes: list[Node] = []
+    nodes: list[tuple[str, Node]] = []
     _collect_tests(tree.tree.root_node, (), False, functions, skips, nodes)
-    assertions = sum(_assertion_nodes(node) for node in nodes)
-    return TestInfo(frozenset(functions), assertions, frozenset(skips))
+    counts = {key: _assertion_nodes(node) for key, node in nodes}
+    return TestInfo(frozenset(functions), sum(counts.values()), frozenset(skips), counts)
 
 
 def _use_root(node: Node | None) -> str:
