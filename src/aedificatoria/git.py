@@ -57,6 +57,26 @@ def resolve_commit(repo: Path, ref: str) -> str:
     return os.fsdecode(proc.stdout).strip()
 
 
+def history_commits(repo: Path, limit: int, since: str | None = None) -> list[tuple[str, str, str]]:
+    """Return up to `limit` first-parent commits, oldest first."""
+    revision = f"{since}..HEAD" if since else "HEAD"
+    proc = _git(
+        repo,
+        "log",
+        "--first-parent",
+        f"--max-count={max(1, limit)}",
+        "--format=%H%x09%aI%x09%s",
+        revision,
+    )
+    rows: list[tuple[str, str, str]] = []
+    for line in os.fsdecode(proc.stdout).splitlines():
+        parts = line.split("\t", 2)
+        if len(parts) == 3:
+            rows.append((parts[0], parts[1], parts[2]))
+    rows.reverse()
+    return rows
+
+
 def _numstat(repo: Path, base: str) -> dict[str, tuple[int, int, bool]]:
     proc = _git(repo, "diff", "--numstat", base, "--")
     stats: dict[str, tuple[int, int, bool]] = {}

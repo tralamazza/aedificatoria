@@ -142,6 +142,27 @@ A missing baseline is an `info` finding so adoption never blocks; a malformed
 baseline is an error. Keys are file paths plus symbol/function names, so a rename
 looks like a removal plus an addition and needs a refresh.
 
+### History audit
+
+For an existing repository, `aed history` reconstructs the last first-parent
+commits and ranks them by metric regressions:
+
+```sh
+aed history --limit 30
+aed history --since v1.0.0 --json
+```
+
+Each commit is checked out into a temporary worktree and measured with the same
+metrics as the baseline. Consecutive commits are compared with zero growth caps,
+so the report surfaces per-function and total complexity growth, API removals and
+growth, new dependencies, new package edges, new cycles, removed tests, and
+assertion drops. It prints a timeline and a ranked "where it went bad" section;
+`--json` returns the same data. It is a report, not a gate: exit 0, no writes.
+
+Limits: first-parent only; the current configuration is used for every commit;
+historical ADRs, one-way doors, and config weakening are not re-evaluated; cost
+grows with `--limit` and repository size.
+
 ## Agent integration
 
 Call the guard before applying or committing a change:
@@ -201,6 +222,8 @@ the change. Hidden tests should still live outside the agent's writable tree.
 - The baseline keys metrics by file plus symbol/function name. Renames look like
   removals plus additions and need a baseline refresh; cumulative file/line churn
   is still judged per diff.
+- History audits are first-parent only, use the current configuration for every
+  commit, and do not re-evaluate historical ADRs or one-way doors.
 - The guard is per-diff. An ADR-authorized configuration weakening still exits 0,
   replacing an assertion with a weaker one while keeping the count is semantic
   and not detected, and cumulative drift across many small commits is handled

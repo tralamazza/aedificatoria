@@ -10,6 +10,7 @@ from pathlib import Path
 from . import __version__
 from . import baseline as baseline_store
 from . import cargo as cargo_tools
+from . import history as history_audit
 from . import languages as language_adapters
 from .adr import create_adr, init_project
 from .checks import run_checks
@@ -42,6 +43,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     baseline_cmd = sub.add_parser("baseline", help="Write the persistent metric baseline")
     _add_path(baseline_cmd)
+
+    hist = sub.add_parser("history", help="Audit first-parent history for metric regressions")
+    _add_path(hist)
+    hist.add_argument("--limit", type=int, default=20, help="First-parent commits to inspect (default: 20)")
+    hist.add_argument("--since", default=None, help="Only commits after this revision")
+    hist.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
 
     adr = sub.add_parser("adr", help="Architecture decision records")
     adr_sub = adr.add_subparsers(dest="adr_cmd", required=True)
@@ -94,6 +101,17 @@ def cmd_baseline(args: argparse.Namespace) -> int:
     data = baseline_store.collect(root, config)
     path = baseline_store.write(root, config.baseline_path, data)
     print(path.relative_to(root) if path.is_relative_to(root) else path)
+    return 0
+
+
+def cmd_history(args: argparse.Namespace) -> int:
+    root = repo_root(Path(args.path))
+    config = load_config(root)
+    points = history_audit.evaluate(root, config, limit=max(1, args.limit), since=args.since)
+    if args.json:
+        print(json.dumps(history_audit.json_payload(points), indent=2))
+    else:
+        print(history_audit.render_text(points))
     return 0
 
 
@@ -161,6 +179,8 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_init(args)
         if args.cmd == "baseline":
             return cmd_baseline(args)
+        if args.cmd == "history":
+            return cmd_history(args)
         if args.cmd == "adr" and args.adr_cmd == "new":
             return cmd_adr_new(args)
         if args.cmd == "rules":

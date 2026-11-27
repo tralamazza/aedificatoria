@@ -1,0 +1,239 @@
+"""Audit first-parent history and rank commits by metric regressions.
+
+This is a report, not a gate: it reconstructs each commit in a temporary
+worktree, computes the same metrics as the persistent baseline, and compares
+consecutive commits with zero growth caps so regressions surface even when the
+current baseline has already accepted them.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, replace
+from pathlib import Path
+from typing import Any
+
+from . import baseline
+from .config import Config
+from .git import base_worktree, history_commits
+from .model import Finding
+from .pyast import strongly_connected
+
+
+@dataclass(frozen=True)
+class HistoryPoint:
+    commit: str
+    date: str
+    subject: str
+    complexity: int
+    api: int
+    dependencies: int
+    edges: int
+    tests: int
+    assertions: int
+    regressions: tuple[Finding, ...]
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "commit": self.commit,
+            "date": self.date,
+            "subject": self.subject,
+            "metrics": {
+                "complexity": self.complexity,
+                "api": self.api,
+                "dependencies": self.dependencies,
+                "edges": self.edges,
+                "tests": self.tests,
+                "assertions": self.assertions,
+            },
+            "regressions": [item.as_dict() for item in self.regressions],
+        }
+
+
+def _total(values: object) -> int:
+    mapping = values if isinstance(values, dict) else {}
+    return sum(
+        score
+        for functions in mapping.values()
+        for score in (functions if isinstance(functions, dict) else {}).values()
+        if isinstance(score, int)
+    )
+
+
+def _count(values: object) -> int:
+    mapping = values if isinstance(values, dict) else {}
+    return sum(len(items) for items in mapping.values() if isinstance(items, list))
+
+
+def _test_counts(values: object) -> tuple[int, int]:
+    mapping = values if isinstance(values, dict) else {}
+    tests = 0
+    assertions = 0
+    for counts in mapping.values():
+        if not isinstance(counts, dict):
+            continue
+        tests += len(counts)
+        assertions += sum(count for count in counts.values() if isinstance(count, int))
+    return tests, assertions
+
+
+def _summary(metrics: dict[str, Any]) -> dict[str, int]:
+    tests, assertions = _test_counts(metrics.get("tests"))
+    return {
+        "complexity": _total(metrics.get("complexity")),
+        "api": _count(metrics.get("api")),
+        "dependencies": len(metrics.get("dependencies") or []),
+        "edges": len(metrics.get("edges") or []),
+        "tests": tests,
+        "assertions": assertions,
+    }
+
+
+def _cycles(metrics: dict[str, Any]) -> set[tuple[str, ...]]:
+    edges = {
+        tuple(edge)
+        for edge in metrics.get("edges") or []
+        if isinstance(edge, list) and len(edge) == 2
+    }
+    nodes = {node for edge in edges for node in edge}
+    return set(strongly_connected(edges, nodes))
+
+
+def _relabel(item: Finding, commit: str, subject: str) -> Finding:
+    message = item.message.replace("since baseline", "in this commit")
+    return Finding(
+        "history",
+        item.severity,
+        message,
+        path=item.path,
+        line=item.line,
+        evidence=f"{commit[:12]} {subject}",
+    )
+
+
+def _regressions(
+    previous: dict[str, Any],
+    current: dict[str, Any],
+    config: Config,
+    commit: str,
+    subject: str,
+) -> list[Finding]:
+    strict = replace(
+        config,
+        max_baseline_complexity_growth=0,
+        max_baseline_api_growth=0,
+        max_baseline_dependency_growth=0,
+        max_baseline_edge_growth=0,
+    )
+    findings = [
+        _relabel(item, commit, subject)
+        for item in baseline.compare(previous, current, strict)
+    ]
+    for component in sorted(_cycles(current) - _cycles(previous)):
+        findings.append(
+            Finding(
+                "history",
+                "error",
+                f"new package cycle: {', '.join(component)}",
+                evidence=f"{commit[:12]} {subject}",
+            )
+        )
+    return findings
+
+
+def _point(
+    commit: str,
+    date: str,
+    subject: str,
+    metrics: dict[str, Any],
+    regressions: list[Finding],
+) -> HistoryPoint:
+    summary = _summary(metrics)
+    return HistoryPoint(
+        commit=commit,
+        date=date,
+        subject=subject,
+        complexity=summary["complexity"],
+        api=summary["api"],
+        dependencies=summary["dependencies"],
+        edges=summary["edges"],
+        tests=summary["tests"],
+        assertions=summary["assertions"],
+        regressions=tuple(regressions),
+    )
+
+
+def evaluate(
+    repo: Path,
+    config: Config,
+    limit: int = 20,
+    since: str | None = None,
+) -> list[HistoryPoint]:
+    points: list[HistoryPoint] = []
+    previous: dict[str, Any] | None = None
+    for commit, date, subject in history_commits(repo, limit, since):
+        with base_worktree(repo, commit) as tree:
+            metrics = baseline.collect(tree, config)
+        regressions = (
+            []
+            if previous is None
+            else _regressions(previous, metrics, config, commit, subject)
+        )
+        points.append(_point(commit, date, subject, metrics, regressions))
+        previous = metrics
+    return points
+
+
+def worst(points: list[HistoryPoint], limit: int = 5) -> list[HistoryPoint]:
+    ranked = sorted(
+        (point for point in points if point.regressions),
+        key=lambda point: (-len(point.regressions), point.commit),
+    )
+    return ranked[:limit]
+
+
+def _delta(value: int, previous: int | None) -> str:
+    if previous is None:
+        return f"{value}"
+    return f"{value} ({value - previous:+d})"
+
+
+def render_text(points: list[HistoryPoint]) -> str:
+    if not points:
+        return "AEDIFICATORIA HISTORY\n\nno commits"
+    lines = [
+        "AEDIFICATORIA HISTORY  first-parent commits",
+        "",
+        "commit    date        complexity      api       deps   edges  tests  assertions  regressions",
+    ]
+    previous: HistoryPoint | None = None
+    for point in points:
+        lines.append(
+            f"{point.commit[:8]}  {point.date[:10]}  "
+            f"{_delta(point.complexity, previous.complexity if previous else None):>13}  "
+            f"{_delta(point.api, previous.api if previous else None):>8}  "
+            f"{_delta(point.dependencies, previous.dependencies if previous else None):>6}  "
+            f"{point.edges:>5}  {point.tests:>5}  {point.assertions:>10}  "
+            f"{len(point.regressions):>5}"
+        )
+        previous = point
+    ranked = worst(points)
+    if ranked:
+        lines.append("")
+        lines.append("WHERE IT WENT BAD")
+        for point in ranked:
+            lines.append(f"{point.commit[:8]} {point.subject} — {len(point.regressions)} regression(s)")
+            for item in point.regressions[:4]:
+                location = f" ({item.path})" if item.path else ""
+                lines.append(f"  [{item.severity}] {item.message}{location}")
+            if len(point.regressions) > 4:
+                lines.append(f"  ... +{len(point.regressions) - 4} more")
+    return "\n".join(lines)
+
+
+def json_payload(points: list[HistoryPoint]) -> dict[str, Any]:
+    return {
+        "tool": "aedificatoria",
+        "kind": "history",
+        "commits": [point.as_dict() for point in points],
+        "worst": [point.as_dict() for point in worst(points)],
+    }
