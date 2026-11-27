@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import json
 import subprocess
+import threading
 from pathlib import Path
 
 from aedificatoria import history
 from aedificatoria.cli import main
 from aedificatoria.config import Config
-from aedificatoria.git import merge_edited_files
+from aedificatoria.git import base_worktree, merge_edited_files
 
 
 def test_history_detects_complexity_regression(repo: Path, commit, write):
@@ -47,6 +49,22 @@ def test_history_detects_new_cycle(repo: Path, commit, write):
 
     points = history.evaluate(repo, Config(), limit=5)
     assert any("new package cycle" in item.message for item in points[-1].regressions)
+
+
+def test_base_worktrees_have_unique_names(repo: Path, commit, write):
+    write(repo, "app.py", "value = 1\n")
+    commit(repo)
+    barrier = threading.Barrier(8)
+
+    def work(_index: int) -> str:
+        with base_worktree(repo, "HEAD") as tree:
+            assert (tree / "app.py").is_file()
+            barrier.wait(timeout=20)
+            return tree.name
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        names = list(pool.map(work, range(8)))
+    assert len(set(names)) == 8
 
 
 def test_history_all_includes_side_branch(repo: Path, commit, write):

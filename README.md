@@ -69,7 +69,7 @@ and `evidence` are optional per finding.
 | `test-config` | warn/error | Test configuration changed/deleted. | Restore; keep the verifier stable. |
 | `import-cycle` | error | New top-level package cycle. | Remove the edge. |
 | `forbidden-edge` | error | New `[[aed.forbidden_edges]]` edge. | Remove the edge. |
-| `complexity` | error | Over `max_complexity`, or growth over `complexity_delta`. | Refactor. |
+| `complexity` | error | New function over `max_complexity`, or existing function growth over `complexity_delta`. | Refactor. |
 | `public-api` | error | Removed/renamed public symbol or changed signature. | Restore compatibility or add an accepted ADR. |
 | `new-dependency` | error | New third-party import not allowlisted. | Reuse a dependency or record an allowlist decision. |
 | `adr-quality` | warn | ADR missing title, status, or `## Decision`. | Fix the ADR. |
@@ -196,7 +196,8 @@ uv pip install -e '.[dev]'
 .venv/bin/aed check
 ```
 
-Design decisions: [`docs/decisions/`](docs/decisions/). Dogfood the guard with:
+Design decisions: [`docs/decisions/`](docs/decisions/). Real-world audit notes:
+[`docs/real-world-audit.md`](docs/real-world-audit.md). Dogfood the guard with:
 
 ```sh
 git config core.hooksPath .githooks

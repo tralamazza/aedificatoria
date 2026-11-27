@@ -148,6 +148,16 @@ def test_rust_public_api_break(repo: Path, commit, write):
     assert any(item.rule == "public-api" and item.severity == "error" for item in findings)
 
 
+def test_rust_parameter_rename_is_not_api_break(repo: Path, commit, write):
+    write(repo, "Cargo.toml", cargo("app"))
+    write(repo, "src/lib.rs", "pub fn handle(value: i32) -> i32 {\n    value\n}\n")
+    commit(repo)
+    write(repo, "src/lib.rs", "pub fn handle(x: i32) -> i32 {\n    x\n}\n")
+
+    findings = evaluate(repo, Config())
+    assert not any(item.rule == "public-api" for item in findings)
+
+
 def test_rust_private_signature_change_is_allowed(repo: Path, commit, write):
     write(repo, "Cargo.toml", cargo("app"))
     write(repo, "src/lib.rs", "fn helper(x: i32) -> i32 {\n    x\n}\n")

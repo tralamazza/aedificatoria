@@ -158,6 +158,18 @@ def test_public_api_resolves_private_reexport(repo: Path, commit, write):
     )
 
 
+def test_complexity_existing_over_limit_unchanged_is_not_flagged(repo: Path, commit, write):
+    body = "def score(x):\n" + "".join(
+        f"    if x == {index}:\n        return {index}\n" for index in range(8)
+    ) + "    return -1\n"
+    write(repo, "risk.py", body)
+    commit(repo)
+    write(repo, "risk.py", body + "\n# no complexity change\n")
+
+    findings = evaluate(repo, Config(max_complexity=5, complexity_delta=1))
+    assert not any(item.rule == "complexity" and "score" in item.message for item in findings)
+
+
 def test_public_api_break_requires_adr(repo: Path, commit, write):
     write(repo, "service.py", "def handle(x: int) -> int:\n    return x\n")
     commit(repo)

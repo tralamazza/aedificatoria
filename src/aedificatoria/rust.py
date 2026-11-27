@@ -115,16 +115,32 @@ def _type_name(node: Node | None) -> str:
     return _text(node)
 
 
+def _parameter_signature(parameters: Node | None) -> str:
+    if parameters is None:
+        return "()"
+    parts: list[str] = []
+    for child in parameters.named_children:
+        if child.type != "parameter":
+            parts.append(_text(child))
+            continue
+        type_node = next(
+            (
+                named
+                for named in reversed(child.named_children)
+                if named.type not in {"identifier", "mutable_specifier", "self_parameter"}
+            ),
+            None,
+        )
+        parts.append(_text(type_node) if type_node is not None else _text(child))
+    return "(" + ",".join(parts) + ")"
+
+
 def _signature(node: Node) -> str:
     parts: list[str] = []
     type_parameters = _field(node, "type_parameters")
     if type_parameters is not None:
         parts.append(_text(type_parameters))
-    parameters = _field(node, "parameters")
-    raw = _text(parameters) if parameters is not None else "()"
-    if not raw.startswith("("):
-        raw = f"({raw})"
-    parts.append(raw)
+    parts.append(_parameter_signature(_field(node, "parameters")))
     returns = _field(node, "return_type")
     if returns is not None:
         parts.append("->" + _text(returns))

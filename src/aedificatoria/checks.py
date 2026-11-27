@@ -440,7 +440,7 @@ def _complexity_findings(
                         path=path,
                     )
                 )
-        elif over_max or over_delta:
+        elif over_delta:
             findings.append(
                 Finding(
                     "complexity",

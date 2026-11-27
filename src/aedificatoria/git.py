@@ -311,7 +311,7 @@ def index_tree(repo: Path) -> Generator[Path, None, None]:
 def base_worktree(repo: Path, commit: str) -> Generator[Path, None, None]:
     """Create a detached worktree of `commit`; remove it on exit."""
     tmp_root = Path(tempfile.mkdtemp(prefix="aed-base-"))
-    tree = tmp_root / "tree"
+    tree = tmp_root / f"tree-{tmp_root.name}"
     proc = subprocess.run(
         ["git", "-C", str(repo), "worktree", "add", "--detach", "--force", str(tree), commit],
         capture_output=True,
