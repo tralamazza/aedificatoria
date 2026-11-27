@@ -32,6 +32,30 @@ def snapshot(repo: Path, config: Config | None = None) -> None:
     baseline.write(repo, cfg.baseline_path, baseline.collect(repo, cfg))
 
 
+def test_index_cache_cleared_between_collects(tmp_path: Path):
+    root = tmp_path / "tree-aed-cache"
+    write = lambda rel, text: (root / rel).parent.mkdir(parents=True, exist_ok=True) or (root / rel).write_text(text)
+    write("package.json", '{"name": "app", "private": true}\n')
+    write("src/lib.ts", "import 'react';\n")
+    config = Config()
+    first = baseline.collect(root, config)
+    write("src/lib.ts", "import 'vue';\n")
+    second = baseline.collect(root, config)
+    assert first["dependencies"] == ["react"]
+    assert second["dependencies"] == ["vue"]
+
+
+def test_file_fact_cache_is_content_keyed():
+    def facts(text: str):
+        return baseline._file_facts("python", ".py", text)
+
+    first = facts("def score(x):\n    return x\n")
+    second = facts("def score(x):\n    return x\n")
+    changed = facts("def score(x):\n    if x:\n        return 1\n    return 0\n")
+    assert first is second
+    assert changed[1]["score"] > first[1]["score"]
+
+
 def test_baseline_clean_after_snapshot(repo: Path, commit, write):
     write(repo, "app.py", "def add(x: int) -> int:\n    return x + 1\n")
     snapshot(repo)

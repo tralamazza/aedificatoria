@@ -10,13 +10,14 @@ a deliberate, ADR-gated change.
 from __future__ import annotations
 
 import json
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from . import languages, pyast
+from . import jsts, languages, pyast
 from .config import Config
 from .git import tracked_source_files
-from .model import Finding
+from .model import Finding, TestInfo
 
 VERSION = 3
 _EVIDENCE = "Run `aed baseline` with an accepted ADR to reset the ratchet."
@@ -34,6 +35,21 @@ def _mapping(value: object) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
+@lru_cache(maxsize=4096)
+def _file_facts(
+    adapter_name: str,
+    extension: str,
+    text: str,
+) -> tuple[TestInfo, dict[str, int], dict[str, str]]:
+    adapter = languages.get("cached" + extension)
+    if adapter is None or adapter.name != adapter_name:
+        return TestInfo(frozenset(), 0, frozenset()), {}, {}
+    tree = adapter.parse_text("cached" + extension, text)
+    if tree is None:
+        return TestInfo(frozenset(), 0, frozenset()), {}, {}
+    return adapter.test_info(tree), adapter.complexity(tree), adapter.public_api(tree)
+
+
 def _collect_file(root: Path, rel: str, config: Config, data: dict[str, Any]) -> None:
     if config.is_metric_excluded(rel):
         return
@@ -44,24 +60,18 @@ def _collect_file(root: Path, rel: str, config: Config, data: dict[str, Any]) ->
         text = (root / rel).read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         return
-    tree = adapter.parse_text(rel, text)
-    if tree is None:
-        return
-    info = adapter.test_info(tree)
+    info, scores, surface = _file_facts(adapter.name, Path(rel).suffix, text)
     if info.counts:
         data["tests"][rel] = dict(sorted(info.counts.items()))
     if info.cases:
         data["test_cases"][rel] = dict(sorted(info.cases.items()))
     if config.is_test(rel):
         return
-    scores = adapter.complexity(tree)
     if scores:
         data["complexity"][rel] = dict(sorted(scores.items()))
     if config.is_api(rel):
         if adapter.name == "python" and Path(rel).name == "__init__.py":
             surface = pyast._resolved_public_api(root, rel, config)
-        else:
-            surface = adapter.public_api(tree)
         if surface:
             data["api"][rel] = dict(sorted(surface.items()))
 
@@ -89,9 +99,13 @@ def collect(root: Path, config: Config) -> dict[str, Any]:
     }
     for rel in _source_files(root, config):
         _collect_file(root, rel, config, data)
-    data["dependencies"] = _dependencies(root, config)
-    edges, _packages = languages.package_graph(root, config)
-    data["edges"] = [list(edge) for edge in sorted(edges)]
+    jsts._clear_index_cache()
+    try:
+        data["dependencies"] = _dependencies(root, config)
+        edges, _packages = languages.package_graph(root, config)
+        data["edges"] = [list(edge) for edge in sorted(edges)]
+    finally:
+        jsts._clear_index_cache()
     return data
 
 

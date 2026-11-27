@@ -1023,6 +1023,21 @@ class RepoIndex:
         return None
 
 
+@lru_cache(maxsize=4)
+def _cached_index(root: str) -> RepoIndex:
+    return RepoIndex(Path(root))
+
+
+def _clear_index_cache() -> None:
+    _cached_index.cache_clear()
+
+
+def _index_for(root: Path) -> RepoIndex:
+    if root.name.startswith("tree-aed-"):
+        return _cached_index(str(root))
+    return RepoIndex(root)
+
+
 def _match_alias(
     config: _TsConfig,
     value: str,
@@ -1054,7 +1069,7 @@ def _alias_target(config: _TsConfig, target: str, wildcard: str) -> str | None:
 
 
 def package_edges(root: Path, config: Config) -> tuple[set[tuple[str, str]], set[str]]:
-    index = RepoIndex(root)
+    index = _index_for(root)
     packages = set(index.packages.values())
     edges: set[tuple[str, str]] = set()
     for rel, tree in index.files.items():
@@ -1070,7 +1085,7 @@ def package_edges(root: Path, config: Config) -> tuple[set[tuple[str, str]], set
 
 
 def project_imports(root: Path, config: Config) -> dict[str, tuple[str, int]]:
-    index = RepoIndex(root)
+    index = _index_for(root)
     found: dict[str, tuple[str, int]] = dict(index.deps)
     for rel, tree in index.files.items():
         if config.is_excluded(rel) or config.is_test(rel):
@@ -1083,8 +1098,8 @@ def project_imports(root: Path, config: Config) -> dict[str, tuple[str, int]]:
 
 
 def declared_dependencies(root: Path, _config: Config) -> dict[str, tuple[str, int]]:
-    return RepoIndex(root).deps
+    return _index_for(root).deps
 
 
 def local_packages(root: Path, _config: Config) -> set[str]:
-    return set(RepoIndex(root).packages.values())
+    return set(_index_for(root).packages.values())

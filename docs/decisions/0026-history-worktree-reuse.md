@@ -3,6 +3,8 @@
 - Status: accepted
 - Date: 2026-11-27
 
+- Amended by: 0027 (per-file metric fact cache)
+
 ## Context
 
 The 1,000-commit Vite audit took 530s. Profiling showed repeated full-tree

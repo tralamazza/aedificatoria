@@ -9,12 +9,12 @@ Findings are history metric regressions, not `aed check` verdicts.
 |---|---|---|---:|---:|---:|
 | `pallets/click` | Python | 2014-08-15..2026-11-16 | 85s | 2,860 | 331 |
 | `BurntSushi/ripgrep` | Rust | 2020-02-20..2026-11-24 | 103s | 862 | 193 |
-| `vitejs/vite` | TypeScript | 2026-02-26..2026-11-27 | 213s (was 530s) | 1,513 | 393 |
+| `vitejs/vite` | TypeScript | 2026-02-26..2026-11-27 | 158s (was 530s) | 1,513 | 393 |
 | `expressjs/express` | JavaScript | 2012-07-06..2026-11-03 | 110s | 729 | 214 |
 
 Parallelism was `--jobs 12`, except Express used `--jobs 4` while Vite was
-running. After ADR 0026 worktree reuse and the parse cache, Vite dropped from
-530s to 213s; metric traversal remains the next bottleneck. The optimized run
+running. After ADR 0026 worktree/parse reuse and ADR 0027 per-file facts,
+Vite dropped from 530s to 158s (100 commits: 57s to 18s). The optimized runs
 produced byte-identical JSON.
 
 ## Smaller controls
