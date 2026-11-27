@@ -24,6 +24,7 @@ from .git import (
     diff_stats,
     history_commits,
     history_graph,
+    merge_edited_files,
 )
 from .model import Finding
 from .pyast import strongly_connected
@@ -39,6 +40,7 @@ _IMPACT_WEIGHTS = (
     ("`", 2),
     ("public API grew", 1),
     ("test `", 1),
+    ("merge-only", 4),
     ("large atomic", 1),
 )
 
@@ -206,6 +208,31 @@ def _atomic_finding(
     ]
 
 
+def _merge_edit_finding(
+    repo: Path,
+    commit: str,
+    parents: tuple[str, ...],
+    subject: str,
+) -> list[Finding]:
+    if len(parents) < 2:
+        return []
+    paths = merge_edited_files(repo, commit)
+    if not paths:
+        return []
+    preview = ", ".join(paths[:4])
+    if len(paths) > 4:
+        preview += f", +{len(paths) - 4} more"
+    return [
+        Finding(
+            "history",
+            "warn",
+            f"merge-only lines in {len(paths)} file(s) "
+            f"(potential conflict resolution): {preview}",
+            evidence=f"{commit[:12]} {subject}",
+        )
+    ]
+
+
 def _regressions(
     previous: dict[str, Any],
     current: dict[str, Any],
@@ -321,6 +348,7 @@ def _evaluate_all(
         regressions.extend(
             _atomic_finding(parents, kind, pr, files, lines, config, commit, subject)
         )
+        regressions.extend(_merge_edit_finding(repo, commit, parents, subject))
         points.append(_point(commit, date, subject, parents, files, lines, current, regressions))
     return points
 
@@ -354,6 +382,7 @@ def evaluate(
         regressions.extend(
             _atomic_finding(parents, kind, pr, files, lines, config, commit, subject)
         )
+        regressions.extend(_merge_edit_finding(repo, commit, parents, subject))
         points.append(_point(commit, date, subject, parents, files, lines, current, regressions))
         previous = current
     return points

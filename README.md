@@ -190,6 +190,12 @@ large merge net diff still produces a `large merge` warning and points to
 `--all`; use that (or the PR/MR history mode) when the merge internals matter.
 First-parent history otherwise sees only the merge's net diff.
 
+Conflict-resolution edits are a separate case: they exist on neither parent.
+History runs `git show --cc` and reports files with lines added or removed
+relative to **every** parent as `merge-only lines ... (potential conflict
+resolution)`. Same-file auto-merges that only combine parent lines are not
+flagged. This is a report signal, not proof that a conflict existed.
+
 For squash-merge workflows, run history and the guard on the PR branch before
 merging:
 
@@ -330,9 +336,11 @@ the change. Hidden tests should still live outside the agent's writable tree.
 - History audits are first-parent by default, use the current configuration for
   every commit, and do not re-evaluate historical ADRs or one-way doors. `--all`
   adds side-branch commits but merge commits are still first-parent net diffs.
-  Squash merges are atomic: history detects PR-style squashes and flags oversized
-  ones, but the intermediate commits are unrecoverable. Check the PR branch
-  before squashing.
+  Merge-only conflict-resolution lines are a heuristic from `git show --cc`;
+  pure reorders, choosing one parent exactly, and some binary conflicts are not
+  detected. Squash merges are atomic: history detects PR-style squashes and flags
+  oversized ones, but the intermediate commits are unrecoverable. Check the PR
+  branch before squashing.
 - `--jobs` parallelizes local metric collection only; each worker holds a parser
   tree and a temporary worktree. Forge API modes remain sequential.
 - The GitHub/GitLab API fallbacks are opt-in and non-hermetic: they need

@@ -133,6 +133,69 @@ def test_history_flags_large_merge_as_recoverable(repo: Path, commit, write):
     assert "feature work" in {point.subject for point in all_points}
 
 
+def test_history_flags_merge_conflict_resolution(repo: Path, commit, write):
+    write(repo, "service.py", "value = 1\n")
+    commit(repo, "base")
+    branch = subprocess.check_output(
+        ["git", "-C", str(repo), "rev-parse", "--abbrev-ref", "HEAD"], text=True
+    ).strip()
+    subprocess.run(
+        ["git", "-C", str(repo), "checkout", "-q", "-b", "feature"], check=True
+    )
+    write(repo, "service.py", "value = 2\n")
+    commit(repo, "feature side")
+    subprocess.run(["git", "-C", str(repo), "checkout", "-q", branch], check=True)
+    write(repo, "service.py", "value = 3\n")
+    commit(repo, "main side")
+    merge = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repo),
+            "merge",
+            "-q",
+            "--no-ff",
+            "feature",
+            "-m",
+            "merge feature",
+        ],
+        check=False,
+    )
+    assert merge.returncode != 0
+    write(repo, "service.py", "value = 4\n")
+    commit(repo, "merge feature")
+
+    points = history.evaluate(repo, Config(), limit=10)
+    point = next(point for point in points if point.kind == "merge")
+    assert any("merge-only lines" in item.message for item in point.regressions)
+    assert any("potential conflict resolution" in item.message for item in point.regressions)
+    assert any("service.py" in item.message for item in point.regressions)
+
+
+def test_history_auto_merge_does_not_flag_merge_only_lines(repo: Path, commit, write):
+    write(repo, "app.py", "a = 1\nb = 2\nc = 3\nd = 4\n")
+    commit(repo, "base")
+    branch = subprocess.check_output(
+        ["git", "-C", str(repo), "rev-parse", "--abbrev-ref", "HEAD"], text=True
+    ).strip()
+    subprocess.run(
+        ["git", "-C", str(repo), "checkout", "-q", "-b", "feature"], check=True
+    )
+    write(repo, "app.py", "a = 1\nb = 2\nside = 3\nc = 3\nd = 4\n")
+    commit(repo, "feature side")
+    subprocess.run(["git", "-C", str(repo), "checkout", "-q", branch], check=True)
+    write(repo, "app.py", "a = 1\nmain = 2\nb = 2\nc = 3\nd = 4\n")
+    commit(repo, "main side")
+    subprocess.run(
+        ["git", "-C", str(repo), "merge", "-q", "--no-ff", "feature", "-m", "merge feature"],
+        check=True,
+    )
+
+    points = history.evaluate(repo, Config(), limit=10)
+    merge = next(point for point in points if point.kind == "merge")
+    assert not any("merge-only lines" in item.message for item in merge.regressions)
+
+
 def test_history_marks_squash_and_flags_oversized_atomic(repo: Path, commit, write):
     write(repo, "README.md", "base\n")
     write(repo, "seed.py", "value = 0\n")

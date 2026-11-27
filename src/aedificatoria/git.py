@@ -117,6 +117,37 @@ def diff_stats(repo: Path, base: str | None, head: str) -> tuple[int, int]:
     return files, lines
 
 
+def merge_edited_files(repo: Path, commit: str) -> list[str]:
+    """Return files with lines changed relative to every parent.
+
+    A combined diff shows only files modified from all parents. Lines prefixed
+    entirely with `+` or `-` are changes relative to every parent, which includes
+    conflict-resolution/manual merge edits. Same-file auto-merges that only
+    combine parent lines do not qualify.
+    """
+    parents = commit_parents(repo, commit)
+    width = len(parents)
+    if width < 2:
+        return []
+    proc = _git(repo, "show", "--cc", "--format=", commit)
+    paths: set[str] = set()
+    current: str | None = None
+    for raw in proc.stdout.splitlines():
+        line = os.fsdecode(raw)
+        if line.startswith("diff --cc "):
+            current = line[len("diff --cc ") :]
+            continue
+        if line.startswith("diff --combined "):
+            current = line[len("diff --combined ") :]
+            continue
+        if current is None or line.startswith(("@@", "--- ", "+++ ", "index ")):
+            continue
+        prefix = line[:width]
+        if prefix and (set(prefix) == {"+"} or set(prefix) == {"-"}):
+            paths.add(current)
+    return sorted(paths)
+
+
 def history_graph(
     repo: Path,
     limit: int,
