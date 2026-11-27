@@ -187,6 +187,11 @@ last commit introduced, run:
 The guard does not run from a hook when no `.venv` or `aed` binary is available;
 it prints a skip notice instead.
 
+CI runs the same guard on every push and pull request via
+[`.github/workflows/aed.yml`](.github/workflows/aed.yml). It uses the PR base
+SHA, or the pushed-from commit, as `--base`, so the gate cannot be bypassed with
+`--no-verify`.
+
 ## Roadmap
 
 - TypeScript/JavaScript adapter (tree-sitter or `dependency-cruiser`).
