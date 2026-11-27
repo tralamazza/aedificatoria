@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 
 from aedificatoria.cli import main
@@ -30,6 +31,41 @@ def test_cli_check_json_blocks_one_way_door(repo: Path, commit, write, capsys):
     assert code == 2
     assert payload["verdict"] == "block"
     assert any(item["rule"] == "one-way-door" for item in payload["findings"])
+
+
+def test_cli_staged_checks_index_not_worktree(repo: Path, commit, write, capsys):
+    strong = "def test_one():\n    assert 1 == 1\n    assert 2 == 2\n"
+    weak = "def test_one():\n    assert 1 == 1\n"
+    write(repo, "tests/test_app.py", strong)
+    commit(repo)
+
+    write(repo, "tests/test_app.py", weak)
+    subprocess.run(["git", "-C", str(repo), "add", "tests/test_app.py"], check=True)
+    write(repo, "tests/test_app.py", strong)
+
+    assert main(["check", "--path", str(repo), "--json"]) == 0
+    capsys.readouterr()
+    assert main(["check", "--path", str(repo), "--staged", "--json"]) == 2
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["verdict"] == "block"
+    assert any(item["rule"] == "test-tampering" for item in payload["findings"])
+
+
+def test_cli_staged_checks_staged_config(repo: Path, commit, write, capsys):
+    strong = "[aed]\nblock_removed_tests = true\n"
+    weak = "[aed]\nblock_removed_tests = false\n"
+    write(repo, "aed.toml", strong)
+    commit(repo)
+
+    write(repo, "aed.toml", weak)
+    subprocess.run(["git", "-C", str(repo), "add", "aed.toml"], check=True)
+    write(repo, "aed.toml", strong)
+
+    assert main(["check", "--path", str(repo), "--json"]) == 0
+    capsys.readouterr()
+    assert main(["check", "--path", str(repo), "--staged", "--json"]) == 2
+    payload = json.loads(capsys.readouterr().out)
+    assert any(item["rule"] == "guard-config" for item in payload["findings"])
 
 
 def test_cli_check_allows_clean_tree(repo: Path, commit, write, capsys):

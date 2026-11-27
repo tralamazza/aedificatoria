@@ -173,8 +173,12 @@ def history_graph(
     return rows
 
 
-def _numstat(repo: Path, base: str) -> dict[str, tuple[int, int, bool]]:
-    proc = _git(repo, "diff", "--numstat", base, "--")
+def _numstat(repo: Path, base: str, *, staged: bool = False) -> dict[str, tuple[int, int, bool]]:
+    args = ["diff"]
+    if staged:
+        args.append("--cached")
+    args.extend(["--numstat", base, "--"])
+    proc = _git(repo, *args)
     stats: dict[str, tuple[int, int, bool]] = {}
     for line in proc.stdout.decode("utf-8", "replace").splitlines():
         parts = line.split("\t")
@@ -210,9 +214,16 @@ def _untracked(repo: Path) -> list[ChangedFile]:
     return out
 
 
-def changed_files(repo: Path, base_commit: str) -> list[ChangedFile]:
-    """Return working-tree changes against `base_commit`, including untracked files."""
-    proc = _git(repo, "diff", "--name-status", "--find-renames", "-z", base_commit, "--")
+def changed_files(repo: Path, base_commit: str, *, staged: bool = False) -> list[ChangedFile]:
+    """Return changes against `base_commit`, from the index or working tree.
+
+    The index mode excludes untracked files because they cannot enter the commit.
+    """
+    args = ["diff"]
+    if staged:
+        args.append("--cached")
+    args.extend(["--name-status", "--find-renames", "-z", base_commit, "--"])
+    proc = _git(repo, *args)
     tokens = proc.stdout.split(b"\0")
     changed: list[ChangedFile] = []
     index = 0
@@ -237,7 +248,7 @@ def changed_files(repo: Path, base_commit: str) -> list[ChangedFile]:
             index += 1
             changed.append(ChangedFile(status=code, path=path))
 
-    stats = _numstat(repo, base_commit)
+    stats = _numstat(repo, base_commit, staged=staged)
     enriched: list[ChangedFile] = []
     for item in changed:
         added, deleted, binary = stats.get(item.path, stats.get(item.base_path, (0, 0, False)))
@@ -253,9 +264,40 @@ def changed_files(repo: Path, base_commit: str) -> list[ChangedFile]:
         )
 
     tracked_paths = {item.path for item in enriched}
-    enriched.extend(item for item in _untracked(repo) if item.path not in tracked_paths)
+    if not staged:
+        enriched.extend(item for item in _untracked(repo) if item.path not in tracked_paths)
     enriched.sort(key=lambda item: item.path)
     return enriched
+
+
+@contextmanager
+def index_tree(repo: Path) -> Generator[Path, None, None]:
+    """Materialize the staged index into a temporary directory."""
+    tmp_root = Path(tempfile.mkdtemp(prefix="aed-index-"))
+    tree = tmp_root / "tree"
+    tree.mkdir()
+    proc = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repo),
+            "checkout-index",
+            "--all",
+            "--force",
+            f"--prefix={tree}{os.sep}",
+        ],
+        capture_output=True,
+        check=False,
+        env=_clean_env(),
+    )
+    if proc.returncode != 0:
+        shutil.rmtree(tmp_root, ignore_errors=True)
+        detail = proc.stderr.decode("utf-8", "replace").strip()
+        raise GitError(detail or "could not materialize the staged index")
+    try:
+        yield tree
+    finally:
+        shutil.rmtree(tmp_root, ignore_errors=True)
 
 
 @contextmanager

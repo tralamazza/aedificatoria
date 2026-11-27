@@ -3,8 +3,8 @@
 Deterministic architecture guard for coding agents and humans.
 
 `aed check` compares the working tree (including untracked files) against a base
-commit in a detached worktree. It exits non-zero on mechanical violations. No
-LLM calls, no network, no source mutation.
+commit in a detached worktree. `--staged` compares the index instead. It exits
+non-zero on mechanical violations. No LLM calls, no network, no source mutation.
 
 ## Install and first run
 
@@ -34,7 +34,7 @@ uv pip install -e '.[dev]'
 
 | Command | Purpose |
 |---|---|
-| `aed check [--base REV] [--config PATH] [--json]` | Check working tree against a base. |
+| `aed check [--base REV] [--config PATH] [--staged] [--json]` | Check working tree or staged index against a base. |
 | `aed baseline` | Write the persistent metric baseline. |
 | `aed history [--limit N] [--all] [--jobs N]` | Audit local history. |
 | `aed history --github-pr N --repo OWNER/REPO` | Audit a GitHub PR via `gh`. |
@@ -138,6 +138,7 @@ Deep semantics, recovery, and caveats: [`docs/history.md`](docs/history.md).
 
 ```sh
 aed check --json > /tmp/aed.json
+aed check --staged --json > /tmp/aed-staged.json  # pre-commit
 ```
 
 If `verdict == "block"` (exit `2`), do not commit. `findings` gives the rule,
@@ -149,7 +150,8 @@ Enable the committed hook once per clone:
 git config core.hooksPath .githooks
 ```
 
-`--no-verify` bypasses the local hook; CI is authoritative. See
+The hook runs `aed check --staged`, so it checks exactly the index being
+committed. `--no-verify` bypasses the local hook; CI is authoritative. See
 [`.github/workflows/aed.yml`](.github/workflows/aed.yml).
 
 ## Languages
@@ -167,7 +169,8 @@ tables. With cargo installed and a root `Cargo.toml`, `aed check` adds
 
 ## Limitations
 
-- Checks the working tree, not the staged index.
+- Default checks use the working tree; use `--staged` (or the hook) to check the
+  index.
 - Complexity is a branch-count heuristic.
 - Cycles are package-level (Python top-level packages, Rust crates), not
   intra-package.

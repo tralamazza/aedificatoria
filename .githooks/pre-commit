@@ -1,7 +1,7 @@
 #!/bin/sh
 # Aedificatoria pre-commit guard.
 #
-# Checks the whole working tree against HEAD. Enable once per clone:
+# Checks the staged index against HEAD. Enable once per clone:
 #   git config core.hooksPath .githooks
 #
 # Set up the project first:
@@ -12,11 +12,11 @@ root=$(git rev-parse --show-toplevel)
 cd "$root"
 
 if [ -x "$root/.venv/bin/aed" ]; then
-    exec "$root/.venv/bin/aed" check
+    exec "$root/.venv/bin/aed" check --staged
 fi
 
 if command -v aed >/dev/null 2>&1; then
-    exec aed check
+    exec aed check --staged
 fi
 
 echo "aed: not on PATH and no .venv; skipping architecture check" >&2

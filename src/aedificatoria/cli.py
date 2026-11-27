@@ -17,9 +17,9 @@ from . import history as history_audit
 from . import languages as language_adapters
 from .adr import create_adr, init_project
 from .checks import run_checks
-from .config import load_config
-from .git import GitError, base_worktree, changed_files, repo_root, resolve_commit
-from .model import Context
+from .config import Config, load_config
+from .git import GitError, base_worktree, changed_files, index_tree, repo_root, resolve_commit
+from .model import ChangedFile, Context
 from .report import exit_code, json_payload, render_text
 
 
@@ -35,10 +35,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--version", action="version", version=f"aedificatoria {__version__}")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
-    check = sub.add_parser("check", help="Check working-tree changes against a base commit")
+    check = sub.add_parser("check", help="Check changes against a base commit")
     _add_path(check)
     check.add_argument("--base", default=None, help="Base revision (default: aed.toml or HEAD)")
     check.add_argument("--config", default=None, help="Config path (default: aed.toml)")
+    check.add_argument(
+        "--staged",
+        action="store_true",
+        help="Check the staged index instead of the working tree",
+    )
     check.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
 
     init = sub.add_parser("init", help="Create aed.toml and the first ADR")
@@ -99,16 +104,18 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def cmd_check(args: argparse.Namespace) -> int:
-    repo = repo_root(Path(args.path))
-    config = load_config(repo, args.config)
-    base_ref = args.base or config.base
-    commit = resolve_commit(repo, base_ref)
-    changed = changed_files(repo, commit)
-    config_path = args.config or "aed.toml"
+def _run_check(
+    repo: Path,
+    head_dir: Path,
+    base_ref: str,
+    commit: str,
+    changed: list[ChangedFile],
+    config: Config,
+    config_path: str,
+):
     with base_worktree(repo, commit) as base_dir:
         context = Context(
-            repo=repo,
+            repo=head_dir,
             base_ref=base_ref,
             base_commit=commit,
             base_dir=base_dir,
@@ -116,7 +123,27 @@ def cmd_check(args: argparse.Namespace) -> int:
             config=config,
             config_path=config_path,
         )
-        findings = run_checks(context)
+        return run_checks(context)
+
+
+def cmd_check(args: argparse.Namespace) -> int:
+    repo = repo_root(Path(args.path))
+    config_path = args.config or "aed.toml"
+    if args.staged:
+        with index_tree(repo) as head_dir:
+            config = load_config(head_dir, config_path)
+            base_ref = args.base or config.base
+            commit = resolve_commit(repo, base_ref)
+            changed = changed_files(repo, commit, staged=True)
+            findings = _run_check(
+                repo, head_dir, base_ref, commit, changed, config, config_path
+            )
+    else:
+        config = load_config(repo, config_path)
+        base_ref = args.base or config.base
+        commit = resolve_commit(repo, base_ref)
+        changed = changed_files(repo, commit)
+        findings = _run_check(repo, repo, base_ref, commit, changed, config, config_path)
 
     if args.json:
         print(json.dumps(json_payload(findings, commit, changed), indent=2))
