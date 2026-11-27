@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import tomllib
 from collections import Counter
 from dataclasses import asdict
 from pathlib import Path
@@ -135,14 +136,21 @@ def _test_config_finding(ctx: Context, item: ChangedFile) -> Finding | None:
     if item.path == "pyproject.toml":
         base_text = ctx.base_text(item.base_path) or ""
         head_text = ctx.head_text(item.path) or ""
-        if "[tool.pytest" in base_text or "[tool.pytest" in head_text:
-            return Finding(
-                "test-config",
-                "warn",
-                "pytest configuration in pyproject.toml changed; verify it does not weaken the suite",
-                path=item.path,
-            )
-        return None
+        if "[tool.pytest" not in base_text and "[tool.pytest" not in head_text:
+            return None
+        try:
+            base = tomllib.loads(base_text).get("tool", {}).get("pytest")
+            head = tomllib.loads(head_text).get("tool", {}).get("pytest")
+        except (tomllib.TOMLDecodeError, AttributeError):
+            base = head = object()
+        if base == head:
+            return None
+        return Finding(
+            "test-config",
+            "warn",
+            "pytest configuration in pyproject.toml changed; verify it does not weaken the suite",
+            path=item.path,
+        )
     if not ctx.config.is_test_config(item.path):
         return None
     if item.is_deleted:

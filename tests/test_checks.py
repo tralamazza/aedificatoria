@@ -308,6 +308,16 @@ def test_check_ignores_hook_git_environment(repo: Path, commit, write, monkeypat
     assert any(item.rule == "one-way-door" for item in findings)
 
 
+def test_pyproject_non_pytest_change_does_not_warn(repo: Path, commit, write):
+    base = '[project]\nname = "app"\n\n[tool.pytest.ini_options]\naddopts = "-q"\n'
+    write(repo, "pyproject.toml", base)
+    commit(repo)
+    write(repo, "pyproject.toml", '[project]\nname = "app"\nlicense = {text = "MIT"}\n\n[tool.pytest.ini_options]\naddopts = "-q"\n')
+
+    findings = evaluate(repo, Config())
+    assert not any(item.rule == "test-config" for item in findings)
+
+
 def test_pyproject_pytest_config_warns(repo: Path, commit, write):
     write(repo, "pyproject.toml", '[tool.pytest.ini_options]\naddopts = "-q"\n')
     commit(repo)

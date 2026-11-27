@@ -278,3 +278,7 @@ Design decisions: [`docs/decisions/`](docs/decisions/). Real-world audit notes:
 git config core.hooksPath .githooks
 aed check --base HEAD~1   # review the last commit
 ```
+
+## License
+
+MIT. See [`LICENSE`](LICENSE).
