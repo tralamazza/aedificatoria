@@ -2,10 +2,11 @@
 
 - Status: accepted
 - Date: 2026-11-27
-- Amended by: 0015 (API signatures, metric scope, baseline v2)
+- Amended by: 0015 (API signatures, metric scope, baseline v2); 0022 (test cases, v3)
 
 > Later: schema v2 stores public API names with signatures and excludes private
-> and metric-excluded files per ADR 0015. The ratchet design is unchanged.
+> and metric-excluded files per ADR 0015. Schema v3 adds parameterized test-case
+> counts per ADR 0022. The ratchet design is unchanged.
 
 ## Context
 

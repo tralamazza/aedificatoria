@@ -567,8 +567,16 @@ def _callback(arguments: Node) -> Node | None:
     return None
 
 
-def _test_call(node: Node) -> tuple[str, str, bool, Node | None] | None:
-    path = _callee_path(_field(node, "function"))
+def _test_call(node: Node) -> tuple[str, str, bool, Node | None, int] | None:
+    function = _field(node, "function")
+    path = _callee_path(function)
+    case_count = 0
+    if function is not None and function.type == "call_expression":
+        inner = _field(function, "function")
+        inner_path = _callee_path(inner)
+        if inner_path and inner_path[-1] == "each":
+            path = inner_path
+            case_count = _each_case_count(function)
     if not path:
         return None
     base = path[0]
@@ -581,7 +589,26 @@ def _test_call(node: Node) -> tuple[str, str, bool, Node | None] | None:
     arguments = _field(node, "arguments")
     if arguments is None:
         return None
-    return verb, _title(arguments), skip, _callback(arguments)
+    return verb, _title(arguments), skip, _callback(arguments), case_count
+
+
+def _template_case_count(node: Node) -> int:
+    return sum(1 for line in _text(node).splitlines() if "${" in line)
+
+
+def _each_case_count(call: Node) -> int:
+    arguments = _field(call, "arguments")
+    if arguments is not None:
+        if arguments.type == "template_string":
+            return _template_case_count(arguments)
+        for child in arguments.named_children:
+            if child.type == "array":
+                return len(child.named_children)
+        return 0
+    for child in call.named_children:
+        if child.type == "template_string":
+            return _template_case_count(child)
+    return 0
 
 
 def _collect_tests(
@@ -591,16 +618,17 @@ def _collect_tests(
     functions: set[str],
     skips: set[str],
     counts: dict[str, int],
+    cases: dict[str, int],
 ) -> None:
     for child in node.named_children:
         if child.type != "call_expression":
-            _collect_tests(child, prefix, inherited_skip, functions, skips, counts)
+            _collect_tests(child, prefix, inherited_skip, functions, skips, counts, cases)
             continue
         call = _test_call(child)
         if call is None:
-            _collect_tests(child, prefix, inherited_skip, functions, skips, counts)
+            _collect_tests(child, prefix, inherited_skip, functions, skips, counts, cases)
             continue
-        verb, title, skip, callback = call
+        verb, title, skip, callback, case_count = call
         if verb == "describe":
             next_prefix = f"{prefix}{title} > " if title else prefix
             body = _field(callback, "body")
@@ -612,6 +640,7 @@ def _collect_tests(
                     functions,
                     skips,
                     counts,
+                    cases,
                 )
             continue
         if not title:
@@ -619,6 +648,8 @@ def _collect_tests(
         name = f"{prefix}{title}"
         functions.add(name)
         counts[name] = _count_assertions(callback) if callback is not None else 0
+        if case_count:
+            cases[name] = case_count
         if inherited_skip or skip:
             skips.add(name)
 
@@ -640,9 +671,10 @@ def test_info(tree: JsFile | None) -> TestInfo:
     functions: set[str] = set()
     skips: set[str] = set()
     counts: dict[str, int] = {}
-    _collect_tests(tree.tree.root_node, "", False, functions, skips, counts)
+    cases: dict[str, int] = {}
+    _collect_tests(tree.tree.root_node, "", False, functions, skips, counts, cases)
     assertions = _count_assertions(tree.tree.root_node)
-    return TestInfo(frozenset(functions), assertions, frozenset(skips), counts)
+    return TestInfo(frozenset(functions), assertions, frozenset(skips), counts, cases)
 
 
 def _first_string(arguments: Node | None) -> str:

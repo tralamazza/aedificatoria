@@ -50,6 +50,7 @@ class TestInfo:
     assertions: int
     skips: frozenset[str]
     counts: dict[str, int] = field(default_factory=dict)
+    cases: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

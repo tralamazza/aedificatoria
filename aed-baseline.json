@@ -209,7 +209,7 @@
     "src/aedificatoria/baseline.py": {
       "_api_findings": 10,
       "_api_symbols": 5,
-      "_collect_file": 10,
+      "_collect_file": 11,
       "_complexity_findings": 7,
       "_dependencies": 5,
       "_dependency_findings": 5,
@@ -217,6 +217,7 @@
       "_mapping": 2,
       "_nested_total": 4,
       "_source_files": 1,
+      "_test_case_findings": 7,
       "_test_findings": 7,
       "collect": 3,
       "compare": 1,
@@ -238,6 +239,7 @@
       "_api_surface_change": 3,
       "_cargo_cycle_findings": 3,
       "_cargo_dependency_findings": 6,
+      "_case_tampering_findings": 4,
       "_complexity_findings": 10,
       "_config_policy": 3,
       "_deleted_test_findings": 4,
@@ -381,9 +383,10 @@
       "_collect_functions": 8,
       "_collect_import_specs": 8,
       "_collect_pair": 4,
-      "_collect_tests": 12,
+      "_collect_tests": 13,
       "_count_assertions": 5,
       "_declaration_api": 9,
+      "_each_case_count": 7,
       "_export_api": 13,
       "_export_clause": 5,
       "_extends_path": 8,
@@ -417,7 +420,8 @@
       "_strip_comments": 11,
       "_strip_jsonc": 1,
       "_strip_trailing_commas": 12,
-      "_test_call": 6,
+      "_template_case_count": 3,
+      "_test_call": 10,
       "_text": 3,
       "_title": 3,
       "_value_signature": 6,
@@ -562,6 +566,7 @@
     "tree_sitter_typescript"
   ],
   "edges": [],
+  "test_cases": {},
   "tests": {
     "src/aedificatoria/jsts.py": {
       "test_info": 0
@@ -581,6 +586,7 @@
       "test_baseline_blocks_test_removal": 1,
       "test_baseline_clean_after_snapshot": 2,
       "test_baseline_cli_writes_deterministically": 3,
+      "test_baseline_detects_each_case_shrink": 1,
       "test_baseline_detects_signature_change": 1,
       "test_baseline_file_change_requires_adr": 1,
       "test_baseline_growth_caps_allow_configured_growth": 1,
@@ -662,6 +668,8 @@
       "test_parse_errors_do_not_crash": 4,
       "test_private_modules_and_metric_scope": 7,
       "test_ts_complexity_ratchet": 1,
+      "test_ts_each_case_removal_is_tampering": 1,
+      "test_ts_each_tables_are_counted": 3,
       "test_ts_inline_test_tampering": 3,
       "test_ts_interface_member_removal": 1,
       "test_ts_public_api_break": 1,
@@ -695,5 +703,5 @@
       "test_rust_use_dependency": 1
     }
   },
-  "version": 2
+  "version": 3
 }

@@ -70,6 +70,26 @@ def test_baseline_ignores_private_api_and_examples(repo: Path, commit, write):
     assert not any(item.rule == "baseline" for item in findings)
 
 
+def test_baseline_detects_each_case_shrink(repo: Path, commit, write):
+    source = """
+test.each([
+    [1, 2],
+    [2, 3],
+])("adds", (a, b) => { expect(a).toBe(b); });
+"""
+    write(repo, "package.json", '{"name": "app", "private": true}\n')
+    write(repo, "src/math.test.ts", source)
+    snapshot(repo)
+    commit(repo)
+    write(repo, "src/math.test.ts", source.replace("    [2, 3],\n", ""))
+
+    findings = evaluate(repo, Config())
+    assert any(
+        item.rule == "baseline" and "parameterized cases" in item.message
+        for item in findings
+    )
+
+
 def test_baseline_blocks_small_complexity_growth(repo: Path, commit, write):
     write(repo, "risk.py", "def score(x: int) -> int:\n    return x\n")
     snapshot(repo)

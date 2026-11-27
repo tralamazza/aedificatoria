@@ -112,9 +112,10 @@ aed check
 ```
 
 The baseline stores per-function complexity, public API signatures, external
-dependencies, package edges, and per-test assertion counts. Growth is ratcheted
-against it; removals and assertion drops are always errors. Renames look like a
-removal plus an addition and require a refresh.
+dependencies, package edges, per-test assertion counts, and parameterized
+test-case counts. Growth is ratcheted against it; removals and assertion/case
+drops are always errors. Renames look like a removal plus an addition and require
+a refresh.
 
 ## History audit
 
@@ -160,15 +161,16 @@ committed. `--no-verify` bypasses the local hook; CI is authoritative. See
 |---|---|---|---|---|
 | Python | `ast` | top-level functions/classes, `__all__` | `test_*`, asserts, skip/xfail | absolute imports |
 | Rust | tree-sitter | `pub` items, fields, variants, impl methods | `#[test]`, `assert!`, `#[ignore]` | `use` roots, Cargo tables |
-| JS/TS | tree-sitter | ES/TS exports, CJS exports, methods | `test`/`it`/`describe`, `.skip`/`.only` | imports, `require`, `package.json` |
+| JS/TS | tree-sitter | ES/TS exports, CJS exports, methods | `test`/`it`/`describe`, `.skip`/`.only`, `.each` case tables | imports, `require`, `package.json` |
 
 Adapters live in `languages.py`; rule code is language-neutral. Rust/JS/TS is
-AST-level: no macro expansion, type checking, or `.each` tables. JS/TS resolves
-nearest `tsconfig.json`/`jsconfig.json` `baseUrl`/`paths` aliases, including
-local `extends`; package-manager `extends` and unresolved aliases fall back to
-external classification. With cargo installed and a root `Cargo.toml`,
-`aed check` adds `cargo-advisory` info findings from
-`cargo metadata --no-deps --offline`.
+AST-level: no macro expansion or type checking. JS/TS resolves nearest
+`tsconfig.json`/`jsconfig.json` `baseUrl`/`paths` aliases, including local
+`extends`; package-manager `extends` and unresolved aliases fall back to external
+classification. `test.each`/`it.each` literal and template tables contribute
+case counts; variable tables are recognized but not ratcheted. With cargo
+installed and a root `Cargo.toml`, `aed check` adds `cargo-advisory` info
+findings from `cargo metadata --no-deps --offline`.
 
 ## Limitations
 

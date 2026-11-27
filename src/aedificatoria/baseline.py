@@ -1,9 +1,10 @@
 """Persistent metric baseline: monotonic ratchets across commits.
 
 The baseline is a committed JSON snapshot of per-file complexity, public API
-symbols, dependencies, package edges, and test assertion counts. `aed check`
-compares the working tree against it, so small increases cannot accumulate
-commit by commit. Refreshing the baseline is a deliberate, ADR-gated change.
+symbols, dependencies, package edges, per-test assertion counts, and
+parameterized test-case counts. `aed check` compares the working tree against it,
+so small increases cannot accumulate commit by commit. Refreshing the baseline is
+a deliberate, ADR-gated change.
 """
 
 from __future__ import annotations
@@ -17,7 +18,7 @@ from .config import Config
 from .git import tracked_source_files
 from .model import Finding
 
-VERSION = 2
+VERSION = 3
 _EVIDENCE = "Run `aed baseline` with an accepted ADR to reset the ratchet."
 
 
@@ -49,6 +50,8 @@ def _collect_file(root: Path, rel: str, config: Config, data: dict[str, Any]) ->
     info = adapter.test_info(tree)
     if info.counts:
         data["tests"][rel] = dict(sorted(info.counts.items()))
+    if info.cases:
+        data["test_cases"][rel] = dict(sorted(info.cases.items()))
     if config.is_test(rel):
         return
     scores = adapter.complexity(tree)
@@ -79,6 +82,7 @@ def collect(root: Path, config: Config) -> dict[str, Any]:
         "dependencies": [],
         "edges": [],
         "tests": {},
+        "test_cases": {},
     }
     for rel in _source_files(root, config):
         _collect_file(root, rel, config, data)
@@ -98,7 +102,7 @@ def load(root: Path, path: str) -> dict[str, Any] | None:
         data = json.loads(candidate.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise BaselineError(str(exc)) from exc
-    if not isinstance(data, dict) or data.get("version") not in {1, VERSION}:
+    if not isinstance(data, dict) or data.get("version") not in {1, 2, VERSION}:
         raise BaselineError(f"unsupported baseline format (expected version {VERSION})")
     return data
 
@@ -278,6 +282,29 @@ def _test_findings(baseline: dict[str, Any], head: dict[str, Any]) -> list[Findi
     return findings
 
 
+def _test_case_findings(baseline: dict[str, Any], head: dict[str, Any]) -> list[Finding]:
+    base_map = _mapping(baseline.get("test_cases"))
+    head_map = _mapping(head.get("test_cases"))
+    findings: list[Finding] = []
+    for file, cases in base_map.items():
+        current = _mapping(head_map.get(file))
+        for name, count in _mapping(cases).items():
+            if not isinstance(count, int) or name not in current:
+                continue
+            now = current[name]
+            if isinstance(now, int) and now < count:
+                findings.append(
+                    Finding(
+                        "baseline",
+                        "error",
+                        f"test `{name}` parameterized cases are {now} since baseline, was {count}",
+                        path=file,
+                        evidence=_EVIDENCE,
+                    )
+                )
+    return findings
+
+
 def compare(
     baseline: dict[str, Any], head: dict[str, Any], config: Config
 ) -> list[Finding]:
@@ -286,4 +313,5 @@ def compare(
     findings.extend(_dependency_findings(baseline, head, config))
     findings.extend(_edge_findings(baseline, head, config))
     findings.extend(_test_findings(baseline, head))
+    findings.extend(_test_case_findings(baseline, head))
     return findings

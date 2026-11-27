@@ -313,6 +313,48 @@ def test_tsconfig_unmatched_alias_remains_external(repo: Path, commit, write):
     assert any(item.rule == "new-dependency" and "@other/pkg" in item.message for item in findings)
 
 
+def test_ts_each_tables_are_counted():
+    source = """
+describe("math", () => {
+    test.each([
+        [1, 2],
+        [2, 3],
+    ])("adds", (a, b) => { expect(a).toBe(b); });
+    it.each(cases)("named", (x) => { expect(x).toBe(1); });
+    test.each`
+        a | b
+        ${1} | ${2}
+        ${3} | ${4}
+    `("rows", ({a, b}) => { expect(a).toBe(b); });
+});
+"""
+    tree = jsts.parse_text("src/math.test.ts", source)
+    assert tree is not None
+    info = jsts.test_info(tree)
+    assert info.functions == frozenset({"math > adds", "math > named", "math > rows"})
+    assert info.cases == {"math > adds": 2, "math > rows": 2}
+
+
+def test_ts_each_case_removal_is_tampering(repo: Path, commit, write):
+    source = """
+test.each([
+    [1, 2],
+    [2, 3],
+])("adds", (a, b) => { expect(a).toBe(b); });
+"""
+    write(repo, "package.json", package("app"))
+    write(repo, "src/math.test.ts", source)
+    commit(repo)
+    write(repo, "src/math.test.ts", source.replace("    [2, 3],\n", ""))
+
+    findings = evaluate(repo, Config())
+    assert any(
+        item.rule == "test-tampering"
+        and "parameterized cases decreased from 2 to 1" in item.message
+        for item in findings
+    )
+
+
 def test_js_import_dependency_and_builtins(repo: Path, commit, write):
     write(repo, "package.json", package("app"))
     write(repo, "src/lib.ts", "export const a = 1;\n")

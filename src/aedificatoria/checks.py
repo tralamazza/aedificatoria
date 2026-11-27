@@ -187,6 +187,26 @@ def _deleted_test_findings(
     ]
 
 
+def _case_tampering_findings(base_info, head_info, path: str) -> list[Finding]:
+    findings: list[Finding] = []
+    for name in sorted(base_info.cases):
+        if name not in head_info.functions:
+            continue
+        before = base_info.cases[name]
+        after = head_info.cases.get(name, 0)
+        if after < before:
+            findings.append(
+                Finding(
+                    "test-tampering",
+                    "error",
+                    f"test `{name}` parameterized cases decreased from {before} to {after}",
+                    path=path,
+                    evidence="Do not remove rows from a parameterized test table.",
+                )
+            )
+    return findings
+
+
 def _weakened_test_findings(
     ctx: Context, item: ChangedFile, base_info: TestInfo, head_info: TestInfo
 ) -> list[Finding]:
@@ -243,6 +263,8 @@ def _weakened_test_findings(
                 evidence="Unskip the test or justify the skip in an ADR.",
             )
         )
+
+    findings.extend(_case_tampering_findings(base_info, head_info, item.path))
 
     if item.is_renamed and not (removed or dropped > 0 or new_skips):
         findings.append(
