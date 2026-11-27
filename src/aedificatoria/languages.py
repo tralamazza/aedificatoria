@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from . import pyast, rust
+from . import jsts, pyast, rust
 from .config import Config
 from .model import TestInfo
 
@@ -15,7 +15,7 @@ from .model import TestInfo
 class Adapter:
     name: str
     extensions: tuple[str, ...]
-    parse_text: Callable[[str | None], Any]
+    parse_text: Callable[[str, str | None], Any]
     public_api: Callable[[Any], dict[str, str]]
     complexity: Callable[[Any], dict[str, int]]
     test_info: Callable[[Any], TestInfo]
@@ -52,6 +52,19 @@ ADAPTERS: tuple[Adapter, ...] = (
         project_imports=rust.project_imports,
         declared_dependencies=rust.declared_dependencies,
         local_packages=rust.local_packages,
+    ),
+    Adapter(
+        name="javascript",
+        extensions=jsts.EXTENSIONS,
+        parse_text=jsts.parse_text,
+        public_api=jsts.public_api,
+        complexity=jsts.complexity,
+        test_info=jsts.test_info,
+        is_stdlib=jsts.is_stdlib,
+        package_edges=jsts.package_edges,
+        project_imports=jsts.project_imports,
+        declared_dependencies=jsts.declared_dependencies,
+        local_packages=jsts.local_packages,
     ),
 )
 

@@ -19,7 +19,7 @@ def is_stdlib(module: str) -> bool:
     return module in sys.stdlib_module_names
 
 
-def parse_text(text: str | None) -> ast.Module | None:
+def parse_text(_path: str, text: str | None) -> ast.Module | None:
     if not text:
         return None
     try:
@@ -333,7 +333,7 @@ def project_imports(root: Path, config: Config) -> dict[str, tuple[str, int]]:
             text = (root / rel).read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
             continue
-        tree = parse_text(text)
+        tree = parse_text(rel, text)
         if tree is None:
             continue
         for ref in imports(tree):
@@ -366,7 +366,7 @@ def package_edges(root: Path, config: Config) -> tuple[set[tuple[str, str]], set
             text = (root / rel).read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
             continue
-        tree = parse_text(text)
+        tree = parse_text(rel, text)
         if tree is None:
             continue
         for ref in imports(tree):

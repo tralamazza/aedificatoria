@@ -22,6 +22,13 @@ _DEFAULT_EXCLUDES = (
     "dist/**",
     "build/**",
     "target/**",
+    "coverage/**",
+    ".next/**",
+    ".nuxt/**",
+    ".svelte-kit/**",
+    ".turbo/**",
+    ".cache/**",
+    "out/**",
     "**/*.egg-info/**",
 )
 
@@ -47,6 +54,10 @@ _DEFAULT_TEST_PATHS = (
     "**/*_test.py",
     "**/*_test.rs",
     "**/*_tests.rs",
+    "**/*.test.*",
+    "**/*.spec.*",
+    "**/__tests__/**",
+    "**/__test__/**",
 )
 
 _DEFAULT_TEST_CONFIG_PATHS = (
@@ -56,6 +67,27 @@ _DEFAULT_TEST_CONFIG_PATHS = (
     "tox.ini",
     "setup.cfg",
     ".coveragerc",
+    "**/jest.config.*",
+    "**/vitest.config.*",
+    "**/.mocharc.*",
+    "**/karma.conf.*",
+    "**/playwright.config.*",
+    "**/cypress.config.*",
+    "**/jest.setup.*",
+    "**/vitest.setup.*",
+)
+
+_DEFAULT_API_PATHS = (
+    "**/*.py",
+    "**/*.rs",
+    "**/*.js",
+    "**/*.jsx",
+    "**/*.mjs",
+    "**/*.cjs",
+    "**/*.ts",
+    "**/*.tsx",
+    "**/*.mts",
+    "**/*.cts",
 )
 
 
@@ -75,7 +107,7 @@ class Config:
     one_way_doors: tuple[str, ...] = _DEFAULT_ONE_WAY_DOORS
     test_paths: tuple[str, ...] = _DEFAULT_TEST_PATHS
     test_config_paths: tuple[str, ...] = _DEFAULT_TEST_CONFIG_PATHS
-    api_paths: tuple[str, ...] = ("**/*.py", "**/*.rs")
+    api_paths: tuple[str, ...] = _DEFAULT_API_PATHS
     allow_new_dependencies: tuple[str, ...] = ()
     forbidden_edges: tuple[ForbiddenEdge, ...] = ()
     max_changed_files: int = 25
@@ -232,7 +264,7 @@ def load_config(repo: Path, path: str | Path | None = None) -> Config:
         one_way_doors=_as_tuple(aed.get("one_way_doors"), _DEFAULT_ONE_WAY_DOORS),
         test_paths=_as_tuple(aed.get("test_paths"), _DEFAULT_TEST_PATHS),
         test_config_paths=_as_tuple(aed.get("test_config_paths"), _DEFAULT_TEST_CONFIG_PATHS),
-        api_paths=_as_tuple(aed.get("api_paths"), ("**/*.py", "**/*.rs")),
+        api_paths=_as_tuple(aed.get("api_paths"), _DEFAULT_API_PATHS),
         allow_new_dependencies=_as_tuple(aed.get("allow_new_dependencies"), ()),
         forbidden_edges=tuple(edges),
         max_changed_files=_as_int(thresholds.get("max_changed_files", aed.get("max_changed_files")), 25),

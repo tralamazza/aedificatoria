@@ -46,6 +46,7 @@ trees. Exit code `2` means block; `0` means allow or review.
 |---|---|---|---|---|
 | Python (`.py`) | `ast` | top-level functions, classes, `__all__` | `test_*` functions, asserts, skip/xfail | absolute imports |
 | Rust (`.rs`) | built-in lexer + brace matcher | `pub` fn/struct/enum/trait/type/const/static, impl and trait methods | `#[test]`/`#[tokio::test]`, inline `#[cfg(test)]` modules, `assert!` macros, `#[ignore]` | `use` roots and Cargo dependency tables |
+| JavaScript/TypeScript (`.js .jsx .mjs .cjs .ts .tsx .mts .cts`) | pinned tree-sitter (JS, TS, TSX grammars) | ES exports, TS interfaces/types/enums, class methods, CJS exports | `test`/`it`/`describe`, `expect`/`assert`, `.skip`/`.todo`/`.only` | imports/re-exports/`require` + `package.json` dependency tables |
 
 Adapters live in `languages.py`; each one exposes parsing, public API,
 complexity, test information, package edges, imports, and local packages.
@@ -53,8 +54,9 @@ Checks dispatch by file extension, so adding a language means adding an
 adapter module and one registry entry, not editing the rules.
 
 Rust analysis is item-level and lexical by design: no toolchain, no network, no
-parser dependency. Struct fields and enum variants are not compared, macros are
-not expanded, and crate-level edges are coarser than module-level edges.
+parser dependency. JavaScript and TypeScript use exact-pinned tree-sitter
+grammars: no Node toolchain and no network at analysis time, but native parser
+wheels. JS/TS results are AST-level; Rust remains dependency-free.
 
 ### Optional cargo advisory
 
@@ -146,9 +148,13 @@ the change. Hidden tests should still live outside the agent's writable tree.
 
 ## Limitations
 
-- Python and Rust are supported. The Python parser is `ast`; the Rust analyzer
-  is a built-in lexer, so Rust results are item-level rather than full syntax
-  trees. TypeScript/JavaScript adapters are the next step.
+- Python, Rust, JavaScript, and TypeScript are supported. The Python parser is
+  `ast`; Rust uses a built-in lexer; JS/TS uses pinned tree-sitter grammars.
+- Rust results are item-level: struct fields and enum variants are not compared,
+  and macros are not expanded. JS/TS results are AST-level, but no type checking
+  is performed: tsconfig path aliases are skipped, `.each` test tables are not
+  tracked, and unbound arrows or object-literal methods are not named in the
+  complexity ratchet.
 - Complexity is a heuristic (branch count), not a full cognitive-complexity
   model.
 - The dependency graph is package-level (Python top-level packages, Rust
@@ -194,7 +200,7 @@ SHA, or the pushed-from commit, as `--base`, so the gate cannot be bypassed with
 
 ## Roadmap
 
-- TypeScript/JavaScript adapter (tree-sitter or `dependency-cruiser`).
+- tsconfig path-alias resolution and `.each` test tables.
 - Module-level cycle detection and per-module forbidden edges.
 - Staged-index mode for real pre-commit hooks.
 - Mutation-score ratchet on changed modules.

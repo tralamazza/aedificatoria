@@ -77,7 +77,7 @@ mod tests {
 
 
 def test_rust_source_analysis():
-    tree = rust.parse_text(RUST_ITEMS)
+    tree = rust.parse_text("src/lib.rs", RUST_ITEMS)
     assert tree is not None
 
     api = rust.public_api(tree)
@@ -102,6 +102,7 @@ def test_rust_source_analysis():
 
 def test_rust_imports_skip_internal_and_expand_groups():
     tree = rust.parse_text(
+        "src/lib.rs",
         """
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};

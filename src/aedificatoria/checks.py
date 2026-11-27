@@ -250,8 +250,10 @@ def check_test_tampering(ctx: Context) -> list[Finding]:
         if adapter is None:
             continue
         base_adapter = languages.get(item.base_path) or adapter
-        base_info = base_adapter.test_info(base_adapter.parse_text(ctx.base_text(item.base_path)))
-        head_info = adapter.test_info(adapter.parse_text(ctx.head_text(item.path)))
+        base_info = base_adapter.test_info(
+            base_adapter.parse_text(item.base_path, ctx.base_text(item.base_path))
+        )
+        head_info = adapter.test_info(adapter.parse_text(item.path, ctx.head_text(item.path)))
         path_test = ctx.config.is_test(item.path) or ctx.config.is_test(item.base_path)
         if not (path_test or base_info.functions or head_info.functions):
             continue
@@ -337,10 +339,14 @@ def check_complexity(ctx: Context) -> list[Finding]:
         adapter = languages.get(item.path)
         if adapter is None or ctx.config.is_test(item.path):
             continue
-        head_tree = adapter.parse_text(ctx.head_text(item.path))
+        head_tree = adapter.parse_text(item.path, ctx.head_text(item.path))
         if head_tree is None:
             continue
-        base_tree = adapter.parse_text(ctx.base_text(item.base_path)) if languages.same_language(item.base_path, item.path) else None
+        base_tree = (
+            adapter.parse_text(item.base_path, ctx.base_text(item.base_path))
+            if languages.same_language(item.base_path, item.path)
+            else None
+        )
         base_scores = adapter.complexity(base_tree) if base_tree is not None else {}
         findings.extend(_complexity_findings(ctx.config, item.path, base_scores, adapter.complexity(head_tree)))
     return findings
@@ -389,10 +395,12 @@ def check_public_api(ctx: Context) -> list[Finding]:
             continue
         if item.status == "A" or not languages.same_language(item.base_path, item.path):
             continue
-        base_tree = adapter.parse_text(ctx.base_text(item.base_path))
+        base_tree = adapter.parse_text(item.base_path, ctx.base_text(item.base_path))
         if base_tree is None:
             continue
-        head_tree = adapter.parse_text(ctx.head_text(item.path)) if not item.is_deleted else None
+        head_tree = (
+            adapter.parse_text(item.path, ctx.head_text(item.path)) if not item.is_deleted else None
+        )
         base_surface = adapter.public_api(base_tree)
         head_surface = adapter.public_api(head_tree) if head_tree is not None else {}
 

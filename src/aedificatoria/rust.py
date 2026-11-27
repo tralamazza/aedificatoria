@@ -712,7 +712,7 @@ class _Analyzer:
         return count
 
 
-def parse_text(text: str | None) -> RustFile | None:
+def parse_text(_path: str, text: str | None) -> RustFile | None:
     if text is None:
         return None
     tokens = tuple(_lex(text))
@@ -926,7 +926,7 @@ class RepoIndex:
                 text = (self.root / rel).read_text(encoding="utf-8")
             except (OSError, UnicodeDecodeError):
                 continue
-            tree = parse_text(text)
+            tree = parse_text(rel, text)
             if tree is None:
                 continue
             self.files[rel] = tree

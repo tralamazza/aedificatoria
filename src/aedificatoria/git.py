@@ -181,6 +181,13 @@ _SKIP_DIRS = {
     "dist",
     "build",
     "target",
+    "coverage",
+    ".next",
+    ".nuxt",
+    ".svelte-kit",
+    ".turbo",
+    ".cache",
+    "out",
 }
 
 

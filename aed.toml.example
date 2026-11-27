@@ -18,9 +18,9 @@ source_roots = ["src", "."]
 
 # test_paths = [
 #   "tests/**", "**/tests/**", "**/test_*.py", "**/*_test.py",
-#   "**/*_test.rs", "**/*_tests.rs",
+#   "**/*_test.rs", "**/*_tests.rs", "**/*.test.*", "**/*.spec.*",
 # ]
-# api_paths = ["**/*.py", "**/*.rs"]
+# api_paths = ["**/*.py", "**/*.rs", "**/*.js", "**/*.jsx", "**/*.ts", "**/*.tsx", "**/*.mjs", "**/*.cjs", "**/*.mts", "**/*.cts"]
 # allow_new_dependencies = []
 cargo_advisory = true
 require_adr_for_large_change = true
