@@ -324,3 +324,35 @@ def test_pyproject_pytest_config_warns(repo: Path, commit, write):
     write(repo, "pyproject.toml", '[tool.pytest.ini_options]\naddopts = "-q --ignore=tests"\n')
     findings = evaluate(repo, Config())
     assert any(item.rule == "test-config" and item.severity == "warn" for item in findings)
+
+
+def test_syntax_error_on_new_python_failure(repo: Path, commit, write):
+    write(repo, "mod.py", "def score(x):\n    return x\n")
+    commit(repo)
+    write(repo, "mod.py", "def score(x):\n    return (x\n")
+
+    findings = evaluate(repo, Config())
+    syntax = [item for item in findings if item.rule == "syntax-error"]
+    assert syntax
+    assert syntax[0].severity == "error"
+    assert syntax[0].path == "mod.py"
+    assert syntax[0].line == 2
+
+
+def test_syntax_error_ignores_pre_existing_failure(repo: Path, commit, write):
+    write(repo, "mod.py", "def score(x):\n    return (x\n")
+    commit(repo)
+    write(repo, "mod.py", "def score(x):\n    return (x + 1\n")
+
+    findings = evaluate(repo, Config())
+    assert not any(item.rule == "syntax-error" for item in findings)
+
+
+def test_syntax_error_ignores_empty_python_file(repo: Path, commit, write):
+    write(repo, "mod.py", "def score(x):\n    return x\n")
+    commit(repo)
+    write(repo, "mod.py", "")
+    assert pyast.parse_text("mod.py", "") is not None
+
+    findings = evaluate(repo, Config())
+    assert not any(item.rule == "syntax-error" for item in findings)

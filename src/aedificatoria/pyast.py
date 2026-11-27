@@ -21,7 +21,7 @@ def is_stdlib(module: str) -> bool:
 
 
 def parse_text(_path: str, text: str | None) -> ast.Module | None:
-    if not text:
+    if text is None:
         return None
     try:
         with warnings.catch_warnings():
@@ -29,6 +29,18 @@ def parse_text(_path: str, text: str | None) -> ast.Module | None:
             return ast.parse(text)
     except SyntaxError:
         return None
+
+
+def syntax_error(text: str | None) -> tuple[int, str, str] | None:
+    if text is None:
+        return None
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", SyntaxWarning)
+            ast.parse(text)
+    except SyntaxError as exc:
+        return (exc.lineno or 1, exc.msg or "invalid syntax", (exc.text or "").strip())
+    return None
 
 
 def imports(tree: ast.Module) -> list[ImportRef]:

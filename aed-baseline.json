@@ -46,6 +46,7 @@
       "check_new_dependencies": "(ctx:Context)->list[Finding]",
       "check_one_way_doors": "(ctx:Context)->list[Finding]",
       "check_public_api": "(ctx:Context)->list[Finding]",
+      "check_syntax_errors": "(ctx:Context)->list[Finding]",
       "check_test_tampering": "(ctx:Context)->list[Finding]",
       "run_checks": "(ctx:Context)->list[Finding]"
     },
@@ -187,6 +188,7 @@
       "project_imports": "(root:Path,config:Config)->dict[str,tuple[str,int]]",
       "public_api": "(tree:ast.Module)->dict[str,str]",
       "strongly_connected": "(edges:set[tuple[str,str]],nodes:set[str])->list[tuple[str,...]]",
+      "syntax_error": "(text:str|None)->tuple[int,str,str]|None",
       "test_info": "(tree:ast.Module|None)->TestInfo"
     },
     "src/aedificatoria/report.py": {
@@ -323,6 +325,7 @@
       "check_new_dependencies": 7,
       "check_one_way_doors": 12,
       "check_public_api": 5,
+      "check_syntax_errors": 7,
       "check_test_tampering": 14,
       "run_checks": 3
     },
@@ -593,6 +596,7 @@
       "public_api": 9,
       "strongly_connected": 7,
       "strongly_connected.visit": 8,
+      "syntax_error": 6,
       "test_info": 2
     },
     "src/aedificatoria/report.py": {
@@ -725,6 +729,9 @@
       "test_pyproject_pytest_config_warns": 1,
       "test_python_init_reexports_resolve": 1,
       "test_report_has_stable_rules": 1,
+      "test_syntax_error_ignores_empty_python_file": 2,
+      "test_syntax_error_ignores_pre_existing_failure": 1,
+      "test_syntax_error_on_new_python_failure": 4,
       "test_test_assertion_removal": 1,
       "test_test_removal_and_skip": 2
     },

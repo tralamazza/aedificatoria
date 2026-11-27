@@ -16,6 +16,7 @@ from .pyast import (
     _package_initializers,
     _resolved_public_api,
     strongly_connected,
+    syntax_error,
 )
 
 
@@ -53,6 +54,33 @@ def _adr_valid(ctx: Context, item: ChangedFile) -> tuple[bool, str]:
     has_decision = re.search(r"(?mi)^##\s+Decision\b", text) is not None
     valid = has_title and status in {"accepted", "proposed"} and has_decision
     return valid, status
+
+
+def check_syntax_errors(ctx: Context) -> list[Finding]:
+    findings: list[Finding] = []
+    for item in _relevant(ctx):
+        if item.is_deleted:
+            continue
+        adapter = languages.get(item.path)
+        if adapter is None or adapter.name != "python":
+            continue
+        error = syntax_error(ctx.head_text(item.path))
+        if error is None:
+            continue
+        if syntax_error(ctx.base_text(item.base_path)) is not None:
+            continue
+        line, message, evidence = error
+        findings.append(
+            Finding(
+                "syntax-error",
+                "error",
+                f"Python syntax error: {message}",
+                path=item.path,
+                line=line,
+                evidence=evidence,
+            )
+        )
+    return findings
 
 
 def check_change_amplification(ctx: Context) -> list[Finding]:
@@ -733,6 +761,7 @@ def check_cargo_advisory(ctx: Context) -> list[Finding]:
 def run_checks(ctx: Context) -> list[Finding]:
     findings: list[Finding] = []
     for check in (
+        check_syntax_errors,
         check_change_amplification,
         check_guard_config,
         check_baseline,

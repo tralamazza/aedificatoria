@@ -67,6 +67,7 @@ and `evidence` are optional per finding.
 | `change-amplification` | error | Diff exceeds the file/line budget. | Split it, or add an ADR. |
 | `baseline` | error | Metric growth beyond caps, removed tests, assertion drop. | Fix it, or refresh with an ADR. |
 | `test-tampering` | error | Deleted tests/assertions, new `skip`/`xfail`/`.only`. | Restore the test. |
+| `syntax-error` | error | New Python file fails to parse. | Fix the syntax error. |
 | `test-config` | warn/error | Test configuration changed/deleted. | Restore; keep the verifier stable. |
 | `import-cycle` | error | New top-level package cycle. | Remove the edge. |
 | `forbidden-edge` | error | New `[[aed.forbidden_edges]]` edge. | Remove the edge. |
