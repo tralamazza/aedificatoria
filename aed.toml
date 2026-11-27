@@ -1,0 +1,36 @@
+# Aedificatoria configuration.
+
+[aed]
+base = "HEAD"
+adr_dir = "docs/decisions"
+source_roots = ["src", "."]
+
+# Paths whose change requires an architecture decision record.
+# one_way_doors = [
+#   "migrations/**", "**/migrations/**",
+#   "schema/**", "**/schema/**",
+#   "api/**", "**/api/**",
+#   "auth/**", "**/auth/**",
+#   "*.proto", "**/*.proto",
+#   "**/openapi*.yaml", "**/openapi*.json",
+# ]
+
+# test_paths = ["tests/**", "**/test_*.py", "**/*_test.py"]
+# api_paths = ["**/*.py"]
+# allow_new_dependencies = []
+require_adr_for_large_change = true
+block_removed_tests = true
+block_removed_asserts = true
+block_new_skips = true
+block_breaking_api = true
+
+[thresholds]
+max_changed_files = 25
+max_changed_lines = 800
+max_complexity = 15
+complexity_delta = 5
+
+# [[aed.forbidden_edges]]
+# from = "api"
+# to = "db"
+# reason = "API must go through the service layer, not the database directly."

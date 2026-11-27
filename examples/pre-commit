@@ -1,0 +1,15 @@
+#!/bin/sh
+# Aedificatoria pre-commit guard.
+#
+# Install: cp examples/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+#
+# This checks the working tree against HEAD, not the staged index. Use it when
+# the whole uncommitted diff is the change you are about to commit.
+set -eu
+
+if ! command -v aed >/dev/null 2>&1; then
+    echo "aed: not on PATH; skipping architecture check" >&2
+    exit 0
+fi
+
+exec aed check --json
