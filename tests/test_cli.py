@@ -181,3 +181,21 @@ def test_doctor_optional_missing_is_not_a_failure():
     tools = [doctor.ToolStatus("glab", "binary", False, False, "", "GitLab MR audits", True)]
     assert doctor.ok(tools)
     assert "optional: missing glab" in doctor.render_text(tools)
+
+
+def test_cli_subdir_commands_use_repository_root(repo: Path, write, capsys):
+    write(repo, "README.md", "base\n")
+    nested = repo / "nested"
+    nested.mkdir()
+
+    assert main(["init", "--path", str(nested)]) == 0
+    assert (repo / "aed.toml").is_file()
+    assert not (nested / "aed.toml").exists()
+
+    assert main(["adr", "new", "Nested", "--path", str(nested)]) == 0
+    assert list((repo / "docs" / "decisions").glob("0002-*.md"))
+
+    assert main(["rules", "--path", str(nested)]) == 0
+    output = capsys.readouterr().out
+    assert "exclude:" in output
+    assert "block flags:" in output

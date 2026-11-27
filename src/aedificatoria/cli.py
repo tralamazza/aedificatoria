@@ -21,6 +21,14 @@ def _add_path(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--path", default=".", help="Repository or project directory (default: .)")
 
 
+def _project_root(path: str) -> Path:
+    candidate = Path(path).resolve()
+    try:
+        return repo_root(candidate)
+    except GitError:
+        return candidate
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="aed",
@@ -254,7 +262,7 @@ def cmd_history(args: argparse.Namespace) -> int:
 def cmd_init(args: argparse.Namespace) -> int:
     from .adr import init_project
 
-    root = Path(args.path).resolve()
+    root = _project_root(args.path)
     created, existing = init_project(root)
     for path in created:
         print(f"created  {path.relative_to(root)}")
@@ -267,7 +275,7 @@ def cmd_init(args: argparse.Namespace) -> int:
 def cmd_adr_new(args: argparse.Namespace) -> int:
     from .adr import create_adr
 
-    root = Path(args.path).resolve()
+    root = _project_root(args.path)
     config = load_config(root)
     path = create_adr(root, args.title, status=args.status, config=config)
     print(path.relative_to(root))
@@ -278,11 +286,17 @@ def cmd_rules(args: argparse.Namespace) -> int:
     from . import cargo as cargo_tools
     from . import languages as language_adapters
 
-    root = Path(args.path).resolve()
+    root = _project_root(args.path)
     config = load_config(root)
     print(f"base: {config.base}")
     print(f"adr_dir: {config.adr_dir}")
     print(f"source_roots: {', '.join(config.source_roots)}")
+    print(f"exclude: {', '.join(config.exclude)}")
+    print(f"test_paths: {', '.join(config.test_paths)}")
+    print(f"test_config_paths: {', '.join(config.test_config_paths)}")
+    print(f"api_paths: {', '.join(config.api_paths)}")
+    print(f"metric_excludes: {', '.join(config.metric_excludes)}")
+    print(f"allow_new_dependencies: {', '.join(config.allow_new_dependencies) or '(none)'}")
     print(f"languages: {', '.join(language_adapters.names())}")
     cargo_state = "available" if cargo_tools.available() else "unavailable"
     print(f"cargo_advisory: {str(config.cargo_advisory).lower()} (cargo {cargo_state}; info only)")
@@ -300,6 +314,14 @@ def cmd_rules(args: argparse.Namespace) -> int:
         f"max_changed_lines={config.max_changed_lines}, "
         f"max_complexity={config.max_complexity}, "
         f"complexity_delta={config.complexity_delta}"
+    )
+    print(
+        "block flags: "
+        f"removed_tests={str(config.block_removed_tests).lower()}, "
+        f"removed_asserts={str(config.block_removed_asserts).lower()}, "
+        f"new_skips={str(config.block_new_skips).lower()}, "
+        f"breaking_api={str(config.block_breaking_api).lower()}, "
+        f"adr_for_large_change={str(config.require_adr_for_large_change).lower()}"
     )
     print("one_way_doors:")
     for pattern in config.one_way_doors:

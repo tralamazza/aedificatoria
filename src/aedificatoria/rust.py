@@ -444,6 +444,8 @@ def _collect_tests(
         if child.type == "attribute_item":
             attributes.append(_text(child))
             continue
+        if child.type in {"line_comment", "block_comment"}:
+            continue
         if child.type == "function_item":
             if any(_is_test_attr(attribute) for attribute in attributes):
                 name = _field(child, "name")

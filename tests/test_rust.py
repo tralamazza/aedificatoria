@@ -405,3 +405,17 @@ impl Public { pub fn show(&self) {} }
     assert "Visible" in api
     assert "Visible::show" in api
     assert "Public::show" in api
+
+
+def test_rust_comment_does_not_hide_test_attribute():
+    source = """
+#[test]
+// a note between the attribute and the function
+fn test_hidden_by_comment() {
+    assert!(true);
+}
+"""
+    tree = rust.parse_text("src/lib.rs", source)
+    assert tree is not None
+    info = rust.test_info(tree)
+    assert "test_hidden_by_comment" in info.functions
