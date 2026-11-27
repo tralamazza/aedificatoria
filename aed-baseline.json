@@ -391,12 +391,15 @@
       "_as_bool": 2,
       "_as_int": 2,
       "_as_tuple": 4,
+      "_complex_glob": 2,
       "_glob_match": 5,
       "_glob_match.walk": 7,
+      "_matches_cached": 8,
+      "_regex_glob": 6,
       "_segment_match": 1,
       "_segment_match.walk": 8,
       "load_config": 13,
-      "matches": 7
+      "matches": 1
     },
     "src/aedificatoria/doctor.py": {
       "ToolStatus.as_dict": 1,
@@ -418,11 +421,14 @@
     "src/aedificatoria/git.py": {
       "_checkout_tree": 3,
       "_clean_env": 4,
+      "_clear_tracked_files": 1,
       "_git": 5,
       "_numstat": 12,
+      "_prime_tracked_files": 3,
       "_source_file": 8,
       "_tracked_git_files": 5,
       "_untracked": 9,
+      "_walked_files": 7,
       "_worktree_lock": 4,
       "_worktree_tree": 3,
       "base_worktree": 5,
@@ -438,7 +444,7 @@
       "remote_url": 2,
       "repo_root": 3,
       "resolve_commit": 1,
-      "tracked_files": 10,
+      "tracked_files": 6,
       "tracked_python_files": 1,
       "tracked_source_files": 3
     },

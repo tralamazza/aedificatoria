@@ -408,6 +408,7 @@ def _worktree_tree(repo: Path, commit: str) -> Generator[Path, None, None]:
         shutil.rmtree(tmp_root, ignore_errors=True)
         detail = proc.stderr.decode("utf-8", "replace").strip()
         raise GitError(detail or f"could not create history worktree at {commit}")
+    _prime_tracked_files(tree)
     try:
         yield tree
     finally:
@@ -418,6 +419,7 @@ def _worktree_tree(repo: Path, commit: str) -> Generator[Path, None, None]:
                 check=False,
                 env=_clean_env(),
             )
+        _clear_tracked_files(tree)
         shutil.rmtree(tmp_root, ignore_errors=True)
 
 
@@ -431,6 +433,8 @@ def _checkout_tree(tree: Path, commit: str) -> None:
     if proc.returncode != 0:
         detail = proc.stderr.decode("utf-8", "replace").strip()
         raise GitError(detail or f"could not check out {commit} in history worktree")
+    _clear_tracked_files(tree)
+    _prime_tracked_files(tree)
 
 
 @contextmanager
@@ -470,9 +474,11 @@ def base_worktree(repo: Path, commit: str) -> Generator[Path, None, None]:
         shutil.rmtree(tmp_root, ignore_errors=True)
         detail = checkout.stderr.decode("utf-8", "replace").strip()
         raise GitError(detail or f"could not materialize tree at {commit}")
+    _prime_tracked_files(tree)
     try:
         yield tree
     finally:
+        _clear_tracked_files(tree)
         shutil.rmtree(tmp_root, ignore_errors=True)
 
 
@@ -533,21 +539,49 @@ def _tracked_git_files(root: Path) -> list[str] | None:
     )
 
 
+def _walked_files(root: Path) -> list[str]:
+    paths: list[str] = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [name for name in dirnames if name not in _SKIP_DIRS]
+        for name in filenames:
+            full = Path(dirpath) / name
+            if full.is_symlink():
+                continue
+            try:
+                paths.append(full.relative_to(root).as_posix())
+            except ValueError:
+                continue
+    return paths
+
+
+_TEMP_TRACKED_CACHE: dict[str, tuple[str, ...]] = {}
+
+
+def _clear_tracked_files(root: Path) -> None:
+    _TEMP_TRACKED_CACHE.pop(str(root.resolve()), None)
+
+
+def _prime_tracked_files(root: Path) -> None:
+    key = str(root.resolve())
+    _TEMP_TRACKED_CACHE[key] = tuple(
+        sorted(rel for rel in _walked_files(root) if (root / rel).is_file())
+    )
+
+
 def tracked_files(root: Path) -> list[str]:
-    """List files, honoring Git ignores/submodules when Git metadata exists."""
-    paths = _tracked_git_files(root)
-    if paths is None:
-        paths = []
-        for dirpath, dirnames, filenames in os.walk(root):
-            dirnames[:] = [name for name in dirnames if name not in _SKIP_DIRS]
-            for name in filenames:
-                full = Path(dirpath) / name
-                if full.is_symlink():
-                    continue
-                try:
-                    paths.append(full.relative_to(root).as_posix())
-                except ValueError:
-                    continue
+    """List files, honoring Git ignores/submodules when Git metadata exists.
+
+    Temporary trees materialized by aed contain only tracked files, so walking
+    them avoids a costly Git index scan per history commit. Their file lists are
+    cached until the next checkout.
+    """
+    cached = _TEMP_TRACKED_CACHE.get(str(root.resolve()))
+    if cached is not None:
+        return list(cached)
+    if not (root / ".git").exists():
+        paths = _walked_files(root)
+    else:
+        paths = _tracked_git_files(root) or _walked_files(root)
     return sorted(rel for rel in paths if (root / rel).is_file())
 
 

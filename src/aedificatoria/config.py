@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import fnmatch
+import re
 import tomllib
 from dataclasses import dataclass
 from functools import lru_cache
@@ -253,27 +255,69 @@ def _glob_match(pattern: str, path: str) -> bool:
     return walk(0, 0)
 
 
+def _complex_glob(pattern: str) -> bool:
+    return len(pattern) > 48 or pattern.count("*") + pattern.count("?") > 4
+
+
+@lru_cache(maxsize=512)
+def _regex_glob(pattern: str) -> re.Pattern[str]:
+    out: list[str] = ["^"]
+    index = 0
+    while index < len(pattern):
+        char = pattern[index]
+        if char == "*":
+            if pattern[index : index + 2] == "**":
+                if pattern[index : index + 3] == "**/":
+                    out.append("(?:.*/)?")
+                    index += 3
+                else:
+                    out.append(".*")
+                    index += 2
+            else:
+                out.append("[^/]*")
+                index += 1
+        elif char == "?":
+            out.append("[^/]")
+            index += 1
+        else:
+            out.append(re.escape(char))
+            index += 1
+    out.append("$")
+    return re.compile("".join(out))
+
+
+@lru_cache(maxsize=8192)
+def _matches_cached(path: str, patterns: tuple[str, ...]) -> bool:
+    posix = path.replace("\\", "/")
+    if posix.startswith("./"):
+        posix = posix[2:]
+    posix = posix.lstrip("/")
+    basename = posix.rsplit("/", 1)[-1]
+    for raw in patterns:
+        pattern = raw.strip()
+        if not pattern:
+            continue
+        if "/" not in pattern:
+            if _complex_glob(pattern):
+                matched = _segment_match(pattern, basename)
+            else:
+                matched = fnmatch.fnmatchcase(basename, pattern)
+        elif _complex_glob(pattern):
+            matched = _glob_match(pattern, posix)
+        else:
+            matched = _regex_glob(pattern).match(posix) is not None
+        if matched:
+            return True
+    return False
+
+
 def matches(path: str, patterns: tuple[str, ...] | list[str]) -> bool:
     """Match a repository-relative path against gitignore-like patterns.
 
     A pattern without `/` matches the basename at any depth; a pattern with
     `/` is anchored at the repository root. `**/` matches zero or more dirs.
     """
-    posix = path.replace("\\", "/")
-    if posix.startswith("./"):
-        posix = posix[2:]
-    posix = posix.lstrip("/")
-    basename = posix.rsplit("/", 1)[-1]
-    for pattern in patterns:
-        pattern = pattern.strip()
-        if not pattern:
-            continue
-        if "/" not in pattern:
-            if _segment_match(pattern, basename):
-                return True
-        elif _glob_match(pattern, posix):
-            return True
-    return False
+    return _matches_cached(path, tuple(patterns))
 
 
 def _as_tuple(value: Any, default: tuple[str, ...]) -> tuple[str, ...]:
