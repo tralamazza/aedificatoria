@@ -20,7 +20,7 @@ source_roots = ["src", "."]
 #   "**/*_test.rs", "**/*_tests.rs", "**/*.test.*", "**/*.spec.*",
 # ]
 # api_paths = ["**/*.py", "**/*.rs", "**/*.js", "**/*.jsx", "**/*.ts", "**/*.tsx", "**/*.mjs", "**/*.cjs", "**/*.mts", "**/*.cts"]
-allow_new_dependencies = ["tree_sitter", "tree_sitter_javascript", "tree_sitter_typescript"]
+allow_new_dependencies = ["tree_sitter", "tree_sitter_javascript", "tree_sitter_rust", "tree_sitter_typescript"]
 cargo_advisory = true
 require_adr_for_large_change = true
 block_removed_tests = true

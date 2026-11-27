@@ -100,6 +100,20 @@ def test_rust_source_analysis():
     assert info.skips == frozenset()
 
 
+def test_rust_struct_field_and_enum_variant_api(repo: Path, commit, write):
+    base = "pub struct W {\n    pub size: i32,\n}\n\npub enum C {\n    Red,\n    Blue,\n}\n"
+    write(repo, "Cargo.toml", cargo("app"))
+    write(repo, "src/lib.rs", base)
+    commit(repo)
+    write(repo, "src/lib.rs", "pub struct W {\n}\n\npub enum C {\n    Red,\n}\n")
+
+    findings = evaluate(repo, Config())
+    assert any(item.rule == "public-api" and item.severity == "error" for item in findings)
+    evidence = " ".join(item.evidence for item in findings if item.rule == "public-api")
+    assert "W::size" in evidence
+    assert "C::Blue" in evidence
+
+
 def test_rust_imports_skip_internal_and_expand_groups():
     tree = rust.parse_text(
         "src/lib.rs",

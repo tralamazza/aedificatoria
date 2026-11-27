@@ -45,7 +45,7 @@ trees. Exit code `2` means block; `0` means allow or review.
 | Language | Parser | Public API | Tests | Dependencies |
 |---|---|---|---|---|
 | Python (`.py`) | `ast` | top-level functions, classes, `__all__` | `test_*` functions, asserts, skip/xfail | absolute imports |
-| Rust (`.rs`) | built-in lexer + brace matcher | `pub` fn/struct/enum/trait/type/const/static, impl and trait methods | `#[test]`/`#[tokio::test]`, inline `#[cfg(test)]` modules, `assert!` macros, `#[ignore]` | `use` roots and Cargo dependency tables |
+| Rust (`.rs`) | pinned tree-sitter Rust grammar | `pub` fn/struct/enum/trait/type/const/static, public fields and variants, impl and trait methods | `#[test]`/`#[tokio::test]`, inline `#[cfg(test)]` modules, `assert!` macros, `#[ignore]` | `use` roots and Cargo dependency tables |
 | JavaScript/TypeScript (`.js .jsx .mjs .cjs .ts .tsx .mts .cts`) | pinned tree-sitter (JS, TS, TSX grammars) | ES exports, TS interfaces/types/enums, class methods, CJS exports | `test`/`it`/`describe`, `expect`/`assert`, `.skip`/`.todo`/`.only` | imports/re-exports/`require` + `package.json` dependency tables |
 
 Adapters live in `languages.py`; each one exposes parsing, public API,
@@ -53,10 +53,10 @@ complexity, test information, package edges, imports, and local packages.
 Checks dispatch by file extension, so adding a language means adding an
 adapter module and one registry entry, not editing the rules.
 
-Rust analysis is item-level and lexical by design: no toolchain, no network, no
-parser dependency. JavaScript and TypeScript use exact-pinned tree-sitter
-grammars: no Node toolchain and no network at analysis time, but native parser
-wheels. JS/TS results are AST-level; Rust remains dependency-free.
+Rust and JavaScript/TypeScript use exact-pinned tree-sitter grammars: no
+toolchain and no network at analysis time, but native parser wheels. Rust
+remains item-level for macros (no expansion), but its public API now includes
+public struct fields and enum variants.
 
 ### Optional cargo advisory
 
@@ -149,12 +149,12 @@ the change. Hidden tests should still live outside the agent's writable tree.
 ## Limitations
 
 - Python, Rust, JavaScript, and TypeScript are supported. The Python parser is
-  `ast`; Rust uses a built-in lexer; JS/TS uses pinned tree-sitter grammars.
-- Rust results are item-level: struct fields and enum variants are not compared,
-  and macros are not expanded. JS/TS results are AST-level, but no type checking
-  is performed: tsconfig path aliases are skipped, `.each` test tables are not
-  tracked, and unbound arrows or object-literal methods are not named in the
-  complexity ratchet.
+  `ast`; Rust and JS/TS use pinned tree-sitter grammars.
+- Rust results are AST-level: macros are not expanded, trait-impl methods
+  without `pub` are not tracked, and the dependency graph is crate-level. JS/TS
+  results are AST-level, but no type checking is performed: tsconfig path
+  aliases are skipped, `.each` test tables are not tracked, and unbound arrows
+  or object-literal methods are not named in the complexity ratchet.
 - Complexity is a heuristic (branch count), not a full cognitive-complexity
   model.
 - The dependency graph is package-level (Python top-level packages, Rust
