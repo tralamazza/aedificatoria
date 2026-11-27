@@ -61,6 +61,8 @@
       "GitError",
       "base_worktree",
       "changed_files",
+      "commit_parents",
+      "diff_stats",
       "history_commits",
       "repo_root",
       "resolve_commit",
@@ -258,6 +260,8 @@
       "_untracked": 7,
       "base_worktree": 3,
       "changed_files": 10,
+      "commit_parents": 1,
+      "diff_stats": 6,
       "history_commits": 4,
       "repo_root": 3,
       "resolve_commit": 1,
@@ -266,18 +270,20 @@
     },
     "src/aedificatoria/history.py": {
       "HistoryPoint.as_dict": 2,
+      "_atomic_finding": 7,
       "_count": 4,
       "_cycles": 7,
       "_delta": 2,
+      "_kind": 3,
       "_point": 1,
       "_regressions": 3,
       "_relabel": 1,
       "_summary": 3,
       "_test_counts": 6,
       "_total": 6,
-      "evaluate": 3,
+      "evaluate": 4,
       "json_payload": 3,
-      "render_text": 11,
+      "render_text": 13,
       "worst": 3
     },
     "src/aedificatoria/jsts.py": {
@@ -520,7 +526,8 @@
       "test_history_cli_json": 5,
       "test_history_detects_complexity_regression": 5,
       "test_history_detects_new_cycle": 1,
-      "test_history_detects_new_dependency": 1
+      "test_history_detects_new_dependency": 1,
+      "test_history_marks_squash_and_flags_oversized_atomic": 6
     },
     "tests/test_jsts.py": {
       "test_ambient_declarations_are_api": 5,

@@ -10,13 +10,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from pathlib import Path
+import re
 from typing import Any
 
 from . import baseline
 from .config import Config
-from .git import base_worktree, history_commits
+from .git import base_worktree, commit_parents, diff_stats, history_commits
 from .model import Finding
 from .pyast import strongly_connected
+
+_SQUASH_PR = re.compile(r"\(#(\d+)\)\s*$")
 
 
 @dataclass(frozen=True)
@@ -24,6 +27,11 @@ class HistoryPoint:
     commit: str
     date: str
     subject: str
+    parents: int
+    kind: str
+    pr: str
+    files: int
+    lines: int
     complexity: int
     api: int
     dependencies: int
@@ -37,6 +45,10 @@ class HistoryPoint:
             "commit": self.commit,
             "date": self.date,
             "subject": self.subject,
+            "parents": self.parents,
+            "kind": self.kind,
+            "pr": self.pr,
+            "churn": {"files": self.files, "lines": self.lines},
             "metrics": {
                 "complexity": self.complexity,
                 "api": self.api,
@@ -110,6 +122,43 @@ def _relabel(item: Finding, commit: str, subject: str) -> Finding:
     )
 
 
+def _kind(parents: tuple[str, ...], subject: str) -> tuple[str, str]:
+    if len(parents) > 1:
+        return "merge", ""
+    match = _SQUASH_PR.search(subject)
+    if match:
+        return "squash", match.group(1)
+    return "commit", ""
+
+
+def _atomic_finding(
+    parents: tuple[str, ...],
+    kind: str,
+    pr: str,
+    files: int,
+    lines: int,
+    config: Config,
+    commit: str,
+    subject: str,
+) -> list[Finding]:
+    if len(parents) > 1:
+        return []
+    over_files = config.max_changed_files > 0 and files > config.max_changed_files
+    over_lines = config.max_changed_lines > 0 and lines > config.max_changed_lines
+    if not (over_files or over_lines):
+        return []
+    label = f"squash #{pr}" if kind == "squash" else "single commit"
+    return [
+        Finding(
+            "history",
+            "warn",
+            f"large atomic {label}: {files} files, {lines} changed lines; "
+            "internal commits are unavailable",
+            evidence=f"{commit[:12]} {subject}",
+        )
+    ]
+
+
 def _regressions(
     previous: dict[str, Any],
     current: dict[str, Any],
@@ -144,14 +193,23 @@ def _point(
     commit: str,
     date: str,
     subject: str,
+    parents: tuple[str, ...],
+    files: int,
+    lines: int,
     metrics: dict[str, Any],
     regressions: list[Finding],
 ) -> HistoryPoint:
     summary = _summary(metrics)
+    kind, pr = _kind(parents, subject)
     return HistoryPoint(
         commit=commit,
         date=date,
         subject=subject,
+        parents=len(parents),
+        kind=kind,
+        pr=pr,
+        files=files,
+        lines=lines,
         complexity=summary["complexity"],
         api=summary["api"],
         dependencies=summary["dependencies"],
@@ -171,6 +229,9 @@ def evaluate(
     points: list[HistoryPoint] = []
     previous: dict[str, Any] | None = None
     for commit, date, subject in history_commits(repo, limit, since):
+        parents = commit_parents(repo, commit)
+        base = parents[0] if parents else None
+        files, lines = diff_stats(repo, base, commit)
         with base_worktree(repo, commit) as tree:
             metrics = baseline.collect(tree, config)
         regressions = (
@@ -178,7 +239,11 @@ def evaluate(
             if previous is None
             else _regressions(previous, metrics, config, commit, subject)
         )
-        points.append(_point(commit, date, subject, metrics, regressions))
+        kind, pr = _kind(parents, subject)
+        regressions.extend(
+            _atomic_finding(parents, kind, pr, files, lines, config, commit, subject)
+        )
+        points.append(_point(commit, date, subject, parents, files, lines, metrics, regressions))
         previous = metrics
     return points
 
@@ -203,17 +268,18 @@ def render_text(points: list[HistoryPoint]) -> str:
     lines = [
         "AEDIFICATORIA HISTORY  first-parent commits",
         "",
-        "commit    date        complexity      api       deps   edges  tests  assertions  regressions",
+        "commit    date        kind        complexity      api       deps  edges  tests  assert  churn       regr",
     ]
     previous: HistoryPoint | None = None
     for point in points:
+        kind = f"squash#{point.pr}" if point.kind == "squash" else point.kind
         lines.append(
-            f"{point.commit[:8]}  {point.date[:10]}  "
+            f"{point.commit[:8]}  {point.date[:10]}  {kind:<10}  "
             f"{_delta(point.complexity, previous.complexity if previous else None):>13}  "
             f"{_delta(point.api, previous.api if previous else None):>8}  "
-            f"{_delta(point.dependencies, previous.dependencies if previous else None):>6}  "
-            f"{point.edges:>5}  {point.tests:>5}  {point.assertions:>10}  "
-            f"{len(point.regressions):>5}"
+            f"{_delta(point.dependencies, previous.dependencies if previous else None):>5}  "
+            f"{point.edges:>5}  {point.tests:>5}  {point.assertions:>6}  "
+            f"{point.files:>4}f/{point.lines:<5}l  {len(point.regressions):>4}"
         )
         previous = point
     ranked = worst(points)
@@ -221,7 +287,11 @@ def render_text(points: list[HistoryPoint]) -> str:
         lines.append("")
         lines.append("WHERE IT WENT BAD")
         for point in ranked:
-            lines.append(f"{point.commit[:8]} {point.subject} — {len(point.regressions)} regression(s)")
+            marker = f" [squash #{point.pr}]" if point.kind == "squash" else ""
+            lines.append(
+                f"{point.commit[:8]} {point.subject}{marker} — "
+                f"{point.files}f/{point.lines}l — {len(point.regressions)} regression(s)"
+            )
             for item in point.regressions[:4]:
                 location = f" ({item.path})" if item.path else ""
                 lines.append(f"  [{item.severity}] {item.message}{location}")

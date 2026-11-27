@@ -159,6 +159,22 @@ growth, new dependencies, new package edges, new cycles, removed tests, and
 assertion drops. It prints a timeline and a ranked "where it went bad" section;
 `--json` returns the same data. It is a report, not a gate: exit 0, no writes.
 
+The timeline also shows each commit's kind and churn. A single-parent commit whose
+subject ends in `(#N)` is treated as a squashed merge. If a single-parent commit
+exceeds `max_changed_files` or `max_changed_lines`, history warns that it is a
+large atomic change and its internal commits are unavailable.
+
+For squash-merge workflows, run history and the guard on the PR branch before
+merging:
+
+```sh
+aed history --since origin/main
+aed check --base origin/main
+```
+
+Squashing permanently discards the intermediate commits. For architecture-
+sensitive work, prefer a merge or rebase merge so the commits remain analyzable.
+
 Limits: first-parent only; the current configuration is used for every commit;
 historical ADRs, one-way doors, and config weakening are not re-evaluated; cost
 grows with `--limit` and repository size.
@@ -223,7 +239,9 @@ the change. Hidden tests should still live outside the agent's writable tree.
   removals plus additions and need a baseline refresh; cumulative file/line churn
   is still judged per diff.
 - History audits are first-parent only, use the current configuration for every
-  commit, and do not re-evaluate historical ADRs or one-way doors.
+  commit, and do not re-evaluate historical ADRs or one-way doors. Squash merges
+  are atomic: history detects PR-style squashes and flags oversized ones, but the
+  intermediate commits are unrecoverable. Check the PR branch before squashing.
 - The guard is per-diff. An ADR-authorized configuration weakening still exits 0,
   replacing an assertion with a weaker one while keeping the count is semantic
   and not detected, and cumulative drift across many small commits is handled

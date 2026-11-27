@@ -77,6 +77,31 @@ def history_commits(repo: Path, limit: int, since: str | None = None) -> list[tu
     return rows
 
 
+def commit_parents(repo: Path, ref: str) -> tuple[str, ...]:
+    proc = _git(repo, "show", "-s", "--format=%P", ref)
+    return tuple(os.fsdecode(proc.stdout).split())
+
+
+def diff_stats(repo: Path, base: str | None, head: str) -> tuple[int, int]:
+    """Return (files, changed lines) for head against base, or its parent."""
+    if base:
+        proc = _git(repo, "diff", "--numstat", base, head, "--")
+    else:
+        proc = _git(repo, "diff-tree", "--root", "--no-commit-id", "--numstat", "-r", head)
+    files = 0
+    lines = 0
+    for row in os.fsdecode(proc.stdout).splitlines():
+        parts = row.split("\t", 2)
+        if len(parts) < 3:
+            continue
+        files += 1
+        if parts[0].isdigit():
+            lines += int(parts[0])
+        if parts[1].isdigit():
+            lines += int(parts[1])
+    return files, lines
+
+
 def _numstat(repo: Path, base: str) -> dict[str, tuple[int, int, bool]]:
     proc = _git(repo, "diff", "--numstat", base, "--")
     stats: dict[str, tuple[int, int, bool]] = {}
