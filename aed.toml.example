@@ -41,6 +41,7 @@ source_roots = ["src", "."]
 # allow_new_dependencies = []
 baseline_path = "aed-baseline.json"
 cargo_advisory = true
+# If false, an over-budget change remains an error even with an ADR.
 require_adr_for_large_change = true
 block_removed_tests = true
 block_removed_asserts = true

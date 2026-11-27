@@ -432,3 +432,25 @@ def test_private_modules_and_metric_scope():
     assert config.is_metric_excluded("examples/app.py")
     assert config.is_metric_excluded("benchmarks/bench.py")
     assert not config.is_metric_excluded("src/app.py")
+
+
+def test_nameless_package_keeps_dependencies(tmp_path: Path):
+    root = tmp_path / "root"
+    (root / "src").mkdir(parents=True)
+    (root / "package.json").write_text(
+        '{"private": true, "dependencies": {"lodash": "^4"}}\n', encoding="utf-8"
+    )
+    (root / "src" / "app.ts").write_text("import lodash from 'lodash';\n", encoding="utf-8")
+    config = Config()
+    assert "lodash" in jsts.declared_dependencies(root, config)
+    assert "lodash" in jsts.project_imports(root, config)
+    assert jsts.local_packages(root, config)
+
+
+def test_interface_comments_do_not_change_api():
+    plain = "export interface X { a: string; }\n"
+    commented = "export interface X {\n  // internal note\n  a: string;\n}\n"
+    lhs = jsts.parse_text("src/x.ts", plain)
+    rhs = jsts.parse_text("src/x.ts", commented)
+    assert lhs is not None and rhs is not None
+    assert jsts.public_api(lhs) == jsts.public_api(rhs)

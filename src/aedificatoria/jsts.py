@@ -340,7 +340,8 @@ def _class_decl_api(declaration: Node, api: dict[str, str], default: bool) -> No
 def _named_decl_api(declaration: Node, api: dict[str, str]) -> None:
     name = _field(declaration, "name")
     if name is not None:
-        api[_text(name)] = f"{declaration.type}:{_norm(_text(declaration))}"
+        body = _strip_comments(_text(declaration))
+        api[_text(name)] = f"{declaration.type}:{_norm(body)}"
 
 
 def _declaration_api(declaration: Node, api: dict[str, str], default: bool) -> None:
@@ -786,15 +787,14 @@ def _read_package(root: Path, rel: str) -> tuple[str, dict[str, tuple[str, int]]
     if not isinstance(data, dict):
         return None
     name = data.get("name")
-    if not isinstance(name, str) or not name:
-        return None
+    normalized = name if isinstance(name, str) and name else ""
     deps: dict[str, tuple[str, int]] = {}
     for table in ("dependencies", "devDependencies", "peerDependencies", "optionalDependencies"):
         values = data.get(table)
         if isinstance(values, dict):
             for dependency in values:
                 deps.setdefault(str(dependency), (rel, 1))
-    return name, deps
+    return normalized, deps
 
 
 @dataclass(frozen=True)
@@ -986,7 +986,10 @@ class RepoIndex:
             if facts is None:
                 continue
             name, deps = facts
-            self.packages[posixpath.dirname(rel)] = name
+            directory = posixpath.dirname(rel)
+            self.packages[directory] = (
+                name or posixpath.basename(directory) or "root"
+            )
             for dependency, site in deps.items():
                 self.deps.setdefault(dependency, site)
 
@@ -1142,13 +1145,26 @@ def _alias_target(config: _TsConfig, target: str, wildcard: str) -> str | None:
     return resolved
 
 
+def _usable(index: RepoIndex, rel: str, config: Config) -> bool:
+    return (
+        not config.is_excluded(rel)
+        and not config.is_test(rel)
+        and not config.is_metric_excluded(rel)
+    )
+
+
 def package_edges(root: Path, config: Config) -> tuple[set[tuple[str, str]], set[str]]:
     index = _index_for(root)
-    packages = set(index.packages.values())
+    files = {
+        rel: tree for rel, tree in index.files.items() if _usable(index, rel, config)
+    }
+    packages = {
+        package
+        for rel in files
+        if (package := index.package_of(rel))
+    }
     edges: set[tuple[str, str]] = set()
-    for rel, tree in index.files.items():
-        if config.is_excluded(rel) or config.is_test(rel):
-            continue
+    for rel, tree in files.items():
         package = index.package_of(rel)
         if not package:
             continue
@@ -1160,9 +1176,13 @@ def package_edges(root: Path, config: Config) -> tuple[set[tuple[str, str]], set
 
 def project_imports(root: Path, config: Config) -> dict[str, tuple[str, int]]:
     index = _index_for(root)
-    found: dict[str, tuple[str, int]] = dict(index.deps)
+    found: dict[str, tuple[str, int]] = {
+        dependency: site
+        for dependency, site in index.deps.items()
+        if _usable(index, site[0], config)
+    }
     for rel, tree in index.files.items():
-        if config.is_excluded(rel) or config.is_test(rel):
+        if not _usable(index, rel, config):
             continue
         for ref in _imports(tree, lambda spec: index._resolve_alias(rel, spec)):
             if ref.level != 0 or not ref.module:
@@ -1172,8 +1192,18 @@ def project_imports(root: Path, config: Config) -> dict[str, tuple[str, int]]:
 
 
 def declared_dependencies(root: Path, _config: Config) -> dict[str, tuple[str, int]]:
-    return _index_for(root).deps
+    index = _index_for(root)
+    return {
+        dependency: site
+        for dependency, site in index.deps.items()
+        if _usable(index, site[0], _config)
+    }
 
 
 def local_packages(root: Path, _config: Config) -> set[str]:
-    return set(_index_for(root).packages.values())
+    index = _index_for(root)
+    return set(index.packages.values()) | {
+        index.package_of(rel)
+        for rel in index.files
+        if _usable(index, rel, _config) and index.package_of(rel)
+    }

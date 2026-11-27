@@ -128,6 +128,13 @@ def _run_check(
 def cmd_check(args: argparse.Namespace) -> int:
     repo = repo_root(Path(args.path))
     config_path = args.config or "aed.toml"
+    if args.config:
+        candidate = Path(args.config)
+        if not candidate.is_absolute():
+            candidate = repo / candidate
+        if not candidate.is_file():
+            print(f"aed: config not found: {args.config}", file=sys.stderr)
+            return 2
     if args.staged:
         with index_tree(repo) as head_dir:
             config = load_config(head_dir, config_path)

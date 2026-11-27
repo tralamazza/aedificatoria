@@ -432,9 +432,15 @@ def _includes(tree: CFile) -> list[tuple[str, bool, int]]:
     return found
 
 
-def _files(root: Path) -> list[str]:
+def _files(root: Path, config: Config) -> list[str]:
     found: list[str] = []
     for rel in tracked_files(root):
+        if (
+            config.is_excluded(rel)
+            or config.is_test(rel)
+            or config.is_metric_excluded(rel)
+        ):
+            continue
         full = root / rel
         if not rel.endswith(EXTENSIONS) or full.is_symlink():
             continue
@@ -462,7 +468,7 @@ def _component(path: str, config: Config) -> str:
 
 def _local_components(root: Path, config: Config) -> dict[str, str]:
     result: dict[str, str] = {}
-    for rel in _files(root):
+    for rel in _files(root, config):
         component = _component(rel, config)
         if component:
             result[component] = rel
@@ -480,7 +486,7 @@ def _target_file(root: Path, rel: str, include: str) -> str | None:
 def package_edges(root: Path, config: Config) -> tuple[set[tuple[str, str]], set[str]]:
     packages = set(_local_components(root, config))
     edges: set[tuple[str, str]] = set()
-    for rel in _files(root):
+    for rel in _files(root, config):
         try:
             text = read_text(root, rel, errors="replace")
         except (OSError, UnicodeDecodeError, ConfinedPathError):
@@ -495,7 +501,12 @@ def package_edges(root: Path, config: Config) -> tuple[set[tuple[str, str]], set
             if system:
                 continue
             target = _target_file(root, rel, include)
-            if target is None:
+            if (
+                target is None
+                or config.is_excluded(target)
+                or config.is_test(target)
+                or config.is_metric_excluded(target)
+            ):
                 continue
             target_component = _component(target, config)
             if target_component and target_component != source:
@@ -506,7 +517,7 @@ def package_edges(root: Path, config: Config) -> tuple[set[tuple[str, str]], set
 def project_imports(root: Path, config: Config) -> dict[str, tuple[str, int]]:
     local = set(_local_components(root, config))
     found: dict[str, tuple[str, int]] = {}
-    for rel in _files(root):
+    for rel in _files(root, config):
         try:
             text = read_text(root, rel, errors="replace")
         except (OSError, UnicodeDecodeError, ConfinedPathError):

@@ -385,3 +385,23 @@ def test_language_defaults_cover_rust():
     assert config.is_test("src/parser_tests.rs")
     assert config.is_api("src/lib.rs")
     assert config.is_api("crates/app/src/main.rs")
+
+
+def test_private_traits_and_private_impls_are_not_api():
+    source = """
+trait Secret { fn hide(&self); }
+struct Hidden;
+impl Hidden { pub fn hide(&self) {} }
+pub trait Visible { fn show(&self); }
+pub struct Public;
+impl Public { pub fn show(&self) {} }
+"""
+    tree = rust.parse_text("src/lib.rs", source)
+    assert tree is not None
+    api = rust.public_api(tree)
+    assert "Secret" not in api
+    assert "Secret::hide" not in api
+    assert "Hidden::hide" not in api
+    assert "Visible" in api
+    assert "Visible::show" in api
+    assert "Public::show" in api

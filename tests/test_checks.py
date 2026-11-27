@@ -473,3 +473,29 @@ def test_syntax_error_on_new_cpp_failure(repo: Path, commit, write):
 
     findings = evaluate(repo, Config())
     assert any(item.rule == "syntax-error" and item.path == "src/main.cpp" for item in findings)
+
+
+def test_python_split_reexports_resolve(tmp_path: Path):
+    root = tmp_path / "root"
+    (root / "pkg").mkdir(parents=True)
+    (root / "pkg" / "_sub.py").write_text(
+        "def a():\n    return 1\n\ndef b():\n    return 2\n", encoding="utf-8"
+    )
+    (root / "pkg" / "__init__.py").write_text(
+        "from ._sub import a\nfrom ._sub import b\n", encoding="utf-8"
+    )
+    surface = pyast._resolved_public_api(root, "pkg/__init__.py", Config())
+    assert {"a", "b"} <= set(surface)
+
+
+def test_metric_excluded_python_imports_are_ignored(tmp_path: Path):
+    root = tmp_path / "root"
+    (root / "docs").mkdir(parents=True)
+    (root / "src").mkdir()
+    (root / "docs" / "conf.py").write_text("import sphinx\n", encoding="utf-8")
+    (root / "src" / "app.py").write_text("import os\n", encoding="utf-8")
+    config = Config()
+    assert "sphinx" not in pyast.project_imports(root, config)
+    edges, packages = pyast.package_edges(root, config)
+    assert "docs" not in packages
+    assert not any("docs" in edge for edge in edges)

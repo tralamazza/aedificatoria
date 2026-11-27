@@ -224,16 +224,40 @@ def _named_item_api(node: Node, module: tuple[str, ...], api: dict[str, str]) ->
     api[_key(module, None, _text(name))] = f"{kind}:" + _norm(_text(_field(node, "type")))
 
 
-def _trait_api(node: Node, module: tuple[str, ...], api: dict[str, str]) -> None:
+def _collect_public_types(
+    container: Node,
+    module: tuple[str, ...],
+    names: set[str],
+) -> None:
+    for child in container.named_children:
+        kind = child.type
+        if kind == "mod_item":
+            name = _field(child, "name")
+            body = _field(child, "body")
+            if name is not None and body is not None:
+                _collect_public_types(body, module + (_text(name),), names)
+        elif kind in {"struct_item", "enum_item", "type_item"} and _is_public(child):
+            name = _field(child, "name")
+            if name is not None:
+                names.add(_key(module, None, _text(name)))
+
+
+def _trait_api(
+    node: Node,
+    module: tuple[str, ...],
+    public_types: set[str],
+    api: dict[str, str],
+) -> None:
+    if not _is_public(node):
+        return
     name = _field(node, "name")
     body = _field(node, "body")
     if name is None:
         return
     key = _key(module, None, _text(name))
-    if _is_public(node):
-        api[key] = "trait"
+    api[key] = "trait"
     if body is not None:
-        _collect_api(body, module, _text(name), True, api)
+        _collect_api(body, module, _text(name), True, public_types, api)
 
 
 def _item_api(
@@ -259,6 +283,7 @@ def _collect_api(
     module: tuple[str, ...],
     owner: str | None,
     default_public: bool,
+    public_types: set[str],
     api: dict[str, str],
 ) -> None:
     for child in container.named_children:
@@ -267,14 +292,25 @@ def _collect_api(
             name = _field(child, "name")
             body = _field(child, "body")
             if name is not None and body is not None:
-                _collect_api(body, module + (_text(name),), None, False, api)
+                _collect_api(
+                    body,
+                    module + (_text(name),),
+                    None,
+                    False,
+                    public_types,
+                    api,
+                )
         elif kind == "impl_item":
             impl_owner = _type_name(_field(child, "type"))
             body = _field(child, "body")
-            if impl_owner and body is not None:
-                _collect_api(body, module, impl_owner, False, api)
+            if (
+                impl_owner
+                and body is not None
+                and _key(module, None, impl_owner) in public_types
+            ):
+                _collect_api(body, module, impl_owner, False, public_types, api)
         elif kind == "trait_item":
-            _trait_api(child, module, api)
+            _trait_api(child, module, public_types, api)
         elif kind in {
             "function_item",
             "function_signature_item",
@@ -286,14 +322,16 @@ def _collect_api(
         }:
             _item_api(child, module, owner, default_public, api)
         elif kind in {"source_file", "declaration_list"}:
-            _collect_api(child, module, owner, default_public, api)
+            _collect_api(child, module, owner, default_public, public_types, api)
 
 
 def public_api(tree: RustFile | None) -> dict[str, str]:
     if tree is None:
         return {}
+    public_types: set[str] = set()
+    _collect_public_types(tree.tree.root_node, (), public_types)
     api: dict[str, str] = {}
-    _collect_api(tree.tree.root_node, (), None, False, api)
+    _collect_api(tree.tree.root_node, (), None, False, public_types, api)
     return api
 
 
@@ -542,6 +580,12 @@ def declared_dependencies(root: Path, _config: Config) -> dict[str, tuple[str, i
     manifests, _ = _repo_files(root)
     found: dict[str, tuple[str, int]] = {}
     for rel in manifests:
+        if (
+            _config.is_excluded(rel)
+            or _config.is_test(rel)
+            or _config.is_metric_excluded(rel)
+        ):
+            continue
         _, deps = _read_manifest(root, rel)
         for dependency, site in deps.items():
             found.setdefault(dependency, site)
@@ -629,13 +673,22 @@ class RepoIndex:
             directory = posixpath.dirname(directory)
 
 
+def _usable(rel: str, config: Config) -> bool:
+    return (
+        not config.is_excluded(rel)
+        and not config.is_test(rel)
+        and not config.is_metric_excluded(rel)
+    )
+
+
 def package_edges(root: Path, config: Config) -> tuple[set[tuple[str, str]], set[str]]:
     index = RepoIndex(root)
-    packages = set(index.crates.values())
+    files = {rel: tree for rel, tree in index.files.items() if _usable(rel, config)}
+    packages = {
+        package for rel in files if (package := index.crate_of(rel))
+    }
     edges: set[tuple[str, str]] = set()
-    for rel, tree in index.files.items():
-        if config.is_excluded(rel) or config.is_test(rel):
-            continue
+    for rel, tree in files.items():
         package = index.crate_of(rel)
         if not package:
             continue
@@ -647,9 +700,13 @@ def package_edges(root: Path, config: Config) -> tuple[set[tuple[str, str]], set
 
 def project_imports(root: Path, config: Config) -> dict[str, tuple[str, int]]:
     index = RepoIndex(root)
-    found: dict[str, tuple[str, int]] = dict(index.deps)
+    found: dict[str, tuple[str, int]] = {
+        dependency: site
+        for dependency, site in index.deps.items()
+        if _usable(site[0], config)
+    }
     for rel, tree in index.files.items():
-        if config.is_excluded(rel) or config.is_test(rel):
+        if not _usable(rel, config):
             continue
         for ref in imports(tree):
             if ref.level != 0 or not ref.module:
@@ -660,4 +717,6 @@ def project_imports(root: Path, config: Config) -> dict[str, tuple[str, int]]:
 
 def local_packages(root: Path, _config: Config) -> set[str]:
     index = RepoIndex(root)
-    return set(index.crates.values()) | set(index.modules)
+    return set(index.crates.values()) | {
+        Path(rel).stem for rel in index.files if _usable(rel, _config)
+    }

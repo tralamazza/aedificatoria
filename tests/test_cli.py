@@ -128,6 +128,14 @@ def test_cli_malformed_config_returns_two(repo: Path, commit, write, capsys):
     assert "Traceback" not in captured.err
 
 
+def test_cli_explicit_missing_config_returns_two(repo: Path, commit, write, capsys):
+    write(repo, "README.md", "base\n")
+    commit(repo)
+
+    assert main(["check", "--path", str(repo), "--config", "missing.toml"]) == 2
+    assert "config not found" in capsys.readouterr().err
+
+
 def test_cli_check_allows_clean_tree(repo: Path, commit, write, capsys):
     write(repo, "README.md", "base\n")
     commit(repo)

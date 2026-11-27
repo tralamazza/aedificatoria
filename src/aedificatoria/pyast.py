@@ -287,7 +287,7 @@ def _resolved_api(
     for node in tree.body:
         if not isinstance(node, ast.ImportFrom):
             continue
-        target = _target_surface(root, rel, node, config, seen)
+        target = _target_surface(root, rel, node, config, set(seen))
         if target is not None:
             _merge_import(surface, target, node, declared)
     return surface
@@ -505,7 +505,7 @@ def local_packages(root: Path, config: Config) -> set[str]:
     packages = {
         config.package_of(path)
         for path in tracked_python_files(root, config)
-        if not config.is_test(path)
+        if not config.is_test(path) and not config.is_metric_excluded(path)
     }
     packages.discard("")
     return packages
@@ -518,7 +518,7 @@ def project_imports(root: Path, config: Config) -> dict[str, tuple[str, int]]:
     """
     found: dict[str, tuple[str, int]] = {}
     for rel in tracked_python_files(root, config):
-        if config.is_test(rel):
+        if config.is_test(rel) or config.is_metric_excluded(rel):
             continue
         try:
             text = read_text(root, rel)
@@ -544,7 +544,11 @@ def package_edges(root: Path, config: Config) -> tuple[set[tuple[str, str]], set
     only absolute cross-package imports become edges. That is the right
     granularity for architectural cycles and layer violations.
     """
-    files = [rel for rel in tracked_python_files(root, config) if not config.is_test(rel)]
+    files = [
+        rel
+        for rel in tracked_python_files(root, config)
+        if not config.is_test(rel) and not config.is_metric_excluded(rel)
+    ]
     packages = {config.package_of(rel) for rel in files}
     packages.discard("")
     edges: set[tuple[str, str]] = set()

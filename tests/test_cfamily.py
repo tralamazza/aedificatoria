@@ -135,3 +135,14 @@ def test_malformed_cpp_does_not_crash():
     assert isinstance(cfamily.public_api(tree), dict)
     assert isinstance(cfamily.complexity(tree), dict)
     assert isinstance(cfamily.test_info(tree), Info)
+
+
+def test_cpp_test_includes_are_not_dependencies(tmp_path: Path):
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_math.cpp").write_text(
+        "#include <gtest/gtest.h>\nTEST(Math, adds) { EXPECT_EQ(1, 1); }\n",
+        encoding="utf-8",
+    )
+    config = Config()
+    assert "gtest" not in cfamily.project_imports(tmp_path, config)
+    assert cfamily.local_packages(tmp_path, config) == set()
