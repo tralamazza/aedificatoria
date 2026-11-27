@@ -201,6 +201,15 @@ Octopus merges use the same N-parent path: every parent branch is reachable with
 diff uses one prefix column per parent. Clean octopus merges produce no merge-only
 finding; manual octopus commits with conflict-resolution edits are inspected.
 
+Rebase merges produce ordinary single-parent commits. Default first-parent history
+already analyzes every commit, so `--all` adds nothing for a clean rebase. There
+is no merge commit, so `large merge` and `merge-only` signals do not apply. A
+conflict resolved during rebase is baked into the rewritten commit and appears as
+a normal commit change; Git does not record that it was a rebase conflict. Original
+SHAs are rewritten, so use the PR/MR history mode if the pre-rebase sequence
+matters. The `(#N)` squash marker is a heuristic: a rebased commit whose subject
+already ends in a PR number can be mislabeled as a squash.
+
 For squash-merge workflows, run history and the guard on the PR branch before
 merging:
 

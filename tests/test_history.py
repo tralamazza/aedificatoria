@@ -262,6 +262,41 @@ def test_merge_edited_files_supports_octopus(repo: Path, commit, write):
     assert merge_edited_files(repo, merge) == ["merge_only.py"]
 
 
+def test_history_rebase_merge_is_linear(repo: Path, commit, write):
+    write(repo, "base.py", "value = 0\n")
+    commit(repo, "base")
+    branch = subprocess.check_output(
+        ["git", "-C", str(repo), "rev-parse", "--abbrev-ref", "HEAD"], text=True
+    ).strip()
+    subprocess.run(
+        ["git", "-C", str(repo), "checkout", "-q", "-b", "feature"], check=True
+    )
+    write(repo, "one.py", "value = 1\n")
+    commit(repo, "feature one")
+    write(repo, "two.py", "value = 2\n")
+    commit(repo, "feature two")
+    subprocess.run(["git", "-C", str(repo), "checkout", "-q", branch], check=True)
+    write(repo, "main.py", "value = 3\n")
+    commit(repo, "main advance")
+    subprocess.run(["git", "-C", str(repo), "checkout", "-q", "feature"], check=True)
+    subprocess.run(["git", "-C", str(repo), "rebase", "-q", branch], check=True)
+    subprocess.run(["git", "-C", str(repo), "checkout", "-q", branch], check=True)
+    subprocess.run(["git", "-C", str(repo), "merge", "-q", "--ff-only", "feature"], check=True)
+
+    points = history.evaluate(repo, Config(), limit=10)
+    assert {"base", "main advance", "feature one", "feature two"} <= {
+        point.subject for point in points
+    }
+    feature = [point for point in points if point.subject.startswith("feature")]
+    assert feature
+    assert all(point.kind == "commit" for point in feature)
+    assert not any(
+        "large merge" in item.message or "merge-only" in item.message
+        for point in points
+        for item in point.regressions
+    )
+
+
 def test_history_marks_squash_and_flags_oversized_atomic(repo: Path, commit, write):
     write(repo, "README.md", "base\n")
     write(repo, "seed.py", "value = 0\n")

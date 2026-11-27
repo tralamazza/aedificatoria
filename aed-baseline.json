@@ -628,6 +628,7 @@
       "test_history_head_ref": 1,
       "test_history_marks_squash_and_flags_oversized_atomic": 7,
       "test_history_parallel_matches_sequential": 1,
+      "test_history_rebase_merge_is_linear": 4,
       "test_merge_edited_files_supports_octopus": 1
     },
     "tests/test_jsts.py": {
