@@ -18,11 +18,22 @@ class GitError(RuntimeError):
     pass
 
 
+_HOOK_GIT_ENV = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_PREFIX")
+
+
+def _clean_env() -> dict[str, str]:
+    env = os.environ.copy()
+    for name in _HOOK_GIT_ENV:
+        env.pop(name, None)
+    return env
+
+
 def _git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[bytes]:
     proc = subprocess.run(
         ["git", "-C", str(repo), *args],
         capture_output=True,
         check=False,
+        env=_clean_env(),
     )
     if check and proc.returncode != 0:
         detail = proc.stderr.decode("utf-8", "replace").strip() or proc.stdout.decode("utf-8", "replace").strip()
@@ -140,6 +151,7 @@ def base_worktree(repo: Path, commit: str) -> Generator[Path, None, None]:
         ["git", "-C", str(repo), "worktree", "add", "--detach", "--force", str(tree), commit],
         capture_output=True,
         check=False,
+        env=_clean_env(),
     )
     if proc.returncode != 0:
         shutil.rmtree(tmp_root, ignore_errors=True)
@@ -152,6 +164,7 @@ def base_worktree(repo: Path, commit: str) -> Generator[Path, None, None]:
             ["git", "-C", str(repo), "worktree", "remove", "--force", str(tree)],
             capture_output=True,
             check=False,
+            env=_clean_env(),
         )
         shutil.rmtree(tmp_root, ignore_errors=True)
 

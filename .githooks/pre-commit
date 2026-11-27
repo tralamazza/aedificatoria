@@ -1,0 +1,23 @@
+#!/bin/sh
+# Aedificatoria pre-commit guard.
+#
+# Checks the whole working tree against HEAD. Enable once per clone:
+#   git config core.hooksPath .githooks
+#
+# Set up the project first:
+#   uv venv .venv && uv pip install -e '.[dev]'
+set -eu
+
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+
+if [ -x "$root/.venv/bin/aed" ]; then
+    exec "$root/.venv/bin/aed" check
+fi
+
+if command -v aed >/dev/null 2>&1; then
+    exec aed check
+fi
+
+echo "aed: not on PATH and no .venv; skipping architecture check" >&2
+exit 0

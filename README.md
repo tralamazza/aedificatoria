@@ -115,9 +115,15 @@ Parse `verdict`. `block` means exit `2` and do not commit. The `findings` array
 contains `rule`, `severity`, `path`, `line`, and `evidence`, so the agent can
 feed the exact violation back into its repair loop.
 
-A pre-commit variant is in [`examples/pre-commit`](examples/pre-commit). It
-checks the working tree, so use it when the whole uncommitted diff is the
-change. Hidden tests should still live outside the agent's writable tree.
+A pre-commit hook is committed at
+[`.githooks/pre-commit`](.githooks/pre-commit). Enable it once per clone:
+
+```sh
+git config core.hooksPath .githooks
+```
+
+It checks the whole working tree, so use it when the whole uncommitted diff is
+the change. Hidden tests should still live outside the agent's writable tree.
 
 ## Why these rules
 
@@ -159,6 +165,27 @@ uv venv .venv
 uv pip install -e '.[dev]'
 .venv/bin/python -m pytest -q
 ```
+
+### Dogfooding
+
+Aedificatoria guards its own diffs. Enable the committed hook once per clone:
+
+```sh
+git config core.hooksPath .githooks
+```
+
+Every commit then runs `aed check` against `HEAD`, and a violating change is
+blocked before it lands.
+
+A clean working tree compares against `HEAD` and is a no-op. To review what the
+last commit introduced, run:
+
+```sh
+.venv/bin/aed check --base HEAD~1
+```
+
+The guard does not run from a hook when no `.venv` or `aed` binary is available;
+it prints a skip notice instead.
 
 ## Roadmap
 

@@ -199,6 +199,17 @@ def test_load_config_thresholds(tmp_path: Path):
     assert config.complexity_delta == 2
 
 
+def test_check_ignores_hook_git_environment(repo: Path, commit, write, monkeypatch):
+    write(repo, "README.md", "base\n")
+    commit(repo)
+    write(repo, "migrations/0001_init.sql", "create table t;\n")
+    monkeypatch.setenv("GIT_INDEX_FILE", ".git/index")
+    monkeypatch.setenv("GIT_DIR", ".git")
+
+    findings = evaluate(repo, Config())
+    assert any(item.rule == "one-way-door" for item in findings)
+
+
 def test_pyproject_pytest_config_warns(repo: Path, commit, write):
     write(repo, "pyproject.toml", '[tool.pytest.ini_options]\naddopts = "-q"\n')
     commit(repo)
