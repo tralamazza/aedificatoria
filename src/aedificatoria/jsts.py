@@ -12,6 +12,7 @@ import os
 import posixpath
 import re
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 
 import tree_sitter_javascript
@@ -157,11 +158,16 @@ def _grammar(path: str) -> str:
     return "js"
 
 
+@lru_cache(maxsize=4096)
+def _parse_cached(grammar: str, text: str) -> Tree:
+    return _PARSERS[grammar].parse(text.encode("utf-8"))
+
+
 def parse_text(path: str, text: str | None) -> JsFile | None:
     if text is None:
         return None
-    parser = _PARSERS[_grammar(path)]
-    return JsFile(parser.parse(text.encode("utf-8")), path)
+    tree = _parse_cached(_grammar(path), text)
+    return JsFile(tree, path)
 
 
 def _field(node: Node | None, name: str) -> Node | None:

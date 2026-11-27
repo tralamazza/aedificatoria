@@ -329,9 +329,9 @@ def _worktree_lock(repo: Path) -> Generator[None, None, None]:
 
 
 @contextmanager
-def base_worktree(repo: Path, commit: str) -> Generator[Path, None, None]:
-    """Create a detached worktree of `commit`; remove it on exit."""
-    tmp_root = Path(tempfile.mkdtemp(prefix="aed-base-"))
+def _worktree_tree(repo: Path, commit: str) -> Generator[Path, None, None]:
+    """Create a reusable detached worktree; caller checks out later commits."""
+    tmp_root = Path(tempfile.mkdtemp(prefix="aed-history-"))
     tree = tmp_root / f"tree-{tmp_root.name}"
     with _worktree_lock(repo):
         proc = subprocess.run(
@@ -343,7 +343,7 @@ def base_worktree(repo: Path, commit: str) -> Generator[Path, None, None]:
     if proc.returncode != 0:
         shutil.rmtree(tmp_root, ignore_errors=True)
         detail = proc.stderr.decode("utf-8", "replace").strip()
-        raise GitError(detail or f"could not create base worktree at {commit}")
+        raise GitError(detail or f"could not create history worktree at {commit}")
     try:
         yield tree
     finally:
@@ -354,6 +354,61 @@ def base_worktree(repo: Path, commit: str) -> Generator[Path, None, None]:
                 check=False,
                 env=_clean_env(),
             )
+        shutil.rmtree(tmp_root, ignore_errors=True)
+
+
+def _checkout_tree(tree: Path, commit: str) -> None:
+    proc = subprocess.run(
+        ["git", "-C", str(tree), "checkout", "--detach", "--force", commit],
+        capture_output=True,
+        check=False,
+        env=_clean_env(),
+    )
+    if proc.returncode != 0:
+        detail = proc.stderr.decode("utf-8", "replace").strip()
+        raise GitError(detail or f"could not check out {commit} in history worktree")
+
+
+@contextmanager
+def base_worktree(repo: Path, commit: str) -> Generator[Path, None, None]:
+    """Materialize `commit` into a temporary tree, without Git worktree admin."""
+    tmp_root = Path(tempfile.mkdtemp(prefix="aed-base-"))
+    tree = tmp_root / f"tree-{tmp_root.name}"
+    index = tmp_root / "index"
+    tree.mkdir()
+    env = _clean_env()
+    env["GIT_INDEX_FILE"] = str(index)
+    read = subprocess.run(
+        ["git", "-C", str(repo), "read-tree", commit],
+        capture_output=True,
+        check=False,
+        env=env,
+    )
+    if read.returncode != 0:
+        shutil.rmtree(tmp_root, ignore_errors=True)
+        detail = read.stderr.decode("utf-8", "replace").strip()
+        raise GitError(detail or f"could not read tree at {commit}")
+    checkout = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repo),
+            "checkout-index",
+            "--all",
+            "--force",
+            f"--prefix={tree}{os.sep}",
+        ],
+        capture_output=True,
+        check=False,
+        env=env,
+    )
+    if checkout.returncode != 0:
+        shutil.rmtree(tmp_root, ignore_errors=True)
+        detail = checkout.stderr.decode("utf-8", "replace").strip()
+        raise GitError(detail or f"could not materialize tree at {commit}")
+    try:
+        yield tree
+    finally:
         shutil.rmtree(tmp_root, ignore_errors=True)
 
 

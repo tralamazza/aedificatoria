@@ -2,7 +2,11 @@
 
 - Status: accepted
 - Date: 2026-11-27
-- Amended by: 0024 (unique worktree basenames); 0025 (serialize worktree admin)
+- Amended by: 0024 (unique worktree basenames); 0025 (serialize worktree admin); 0026 (chunked reuse, parse cache)
+
+> Later: history commits are split into contiguous chunks per worker, each worker
+> reuses one worktree, and JS/TS trees are cached by source content. The
+> per-commit description below is the original design.
 
 ## Context
 

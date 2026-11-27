@@ -3,8 +3,9 @@
 Deterministic architecture guard for coding agents and humans.
 
 `aed check` compares the working tree (including untracked files) against a base
-commit in a detached worktree. `--staged` compares the index instead. It exits
-non-zero on mechanical violations. No LLM calls, no network, no source mutation.
+commit materialized into a temporary tree. `--staged` compares the index instead.
+It exits non-zero on mechanical violations. No LLM calls, no network, no source
+mutation.
 
 ## Install and first run
 

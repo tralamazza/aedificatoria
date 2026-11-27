@@ -18,6 +18,8 @@ from typing import Any, Generator
 from . import baseline
 from .config import Config
 from .git import (
+    _checkout_tree,
+    _worktree_tree,
     base_worktree,
     commit_exists,
     commit_parents,
@@ -300,24 +302,38 @@ def _collect_commit(repo: str, sha: str, config: Config) -> dict[str, Any]:
         return baseline.collect(tree, config)
 
 
+def _collect_chunk(
+    payload: tuple[str, list[str], Config],
+) -> list[dict[str, Any]]:
+    repo, commits, config = payload
+    if not commits:
+        return []
+    results: list[dict[str, Any]] = []
+    with _worktree_tree(Path(repo), commits[0]) as tree:
+        for index, sha in enumerate(commits):
+            if index:
+                _checkout_tree(tree, sha)
+            results.append(baseline.collect(tree, config))
+    return results
+
+
 def _collect_metrics(
     repo: Path,
     commits: list[str],
     config: Config,
     jobs: int,
 ) -> list[dict[str, Any]]:
-    if jobs <= 1 or len(commits) <= 1:
-        return [_collect_commit(str(repo), sha, config) for sha in commits]
-    workers = min(jobs, len(commits))
+    if not commits:
+        return []
+    workers = max(1, min(jobs, len(commits)))
+    size = (len(commits) + workers - 1) // workers
+    chunks = [commits[index : index + size] for index in range(0, len(commits), size)]
+    payloads = [(str(repo), chunk, config) for chunk in chunks]
+    if len(chunks) == 1:
+        return _collect_chunk(payloads[0])
     with ProcessPoolExecutor(max_workers=workers) as pool:
-        return list(
-            pool.map(
-                _collect_commit,
-                [str(repo)] * len(commits),
-                commits,
-                [config] * len(commits),
-            )
-        )
+        collected = list(pool.map(_collect_chunk, payloads))
+    return [item for chunk in collected for item in chunk]
 
 
 def _evaluate_all(
