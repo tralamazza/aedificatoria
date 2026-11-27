@@ -78,8 +78,19 @@ and `evidence` are optional per finding.
 Private paths (`_module.py`, `_dir/`) are excluded from public API unless a
 symbol is explicitly re-exported through a package `__init__.py`. `docs/**`,
 `examples/**`, and `benchmarks/**` are excluded from production metrics by
-default. An accepted ADR needs a `# title`,
-`- Status: accepted`, and a `## Decision`; create it with `aed adr new TITLE`.
+default.
+
+## ADRs
+
+**ADR** means **Architecture Decision Record**: a numbered Markdown file under
+`adr_dir` (default `docs/decisions/`) that records the context, decision,
+alternatives, consequences, invariants, and rollback path for a consequential
+change. Create one with `aed adr new TITLE`.
+
+An accepted ADR needs a `# title`, `- Status: accepted`, and a `## Decision`
+section. Accepted ADRs authorize one-way-door, verifier-config, baseline, and
+public-API changes; `adr-quality` checks only that structure, not whether the
+decision itself is good.
 
 ## Configuration
 
