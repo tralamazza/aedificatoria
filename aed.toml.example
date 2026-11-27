@@ -21,6 +21,7 @@ source_roots = ["src", "."]
 #   "**/*_test.rs", "**/*_tests.rs", "**/*.test.*", "**/*.spec.*",
 # ]
 # api_paths = ["**/*.py", "**/*.rs", "**/*.js", "**/*.jsx", "**/*.ts", "**/*.tsx", "**/*.mjs", "**/*.cjs", "**/*.mts", "**/*.cts"]
+# metric_excludes = ["docs/**", "examples/**", "benchmarks/**"]
 # allow_new_dependencies = []
 baseline_path = "aed-baseline.json"
 cargo_advisory = true

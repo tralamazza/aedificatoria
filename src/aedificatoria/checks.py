@@ -430,7 +430,11 @@ def check_complexity(ctx: Context) -> list[Finding]:
     findings: list[Finding] = []
     for item in _relevant(ctx):
         adapter = languages.get(item.path)
-        if adapter is None or ctx.config.is_test(item.path):
+        if (
+            adapter is None
+            or ctx.config.is_test(item.path)
+            or ctx.config.is_metric_excluded(item.path)
+        ):
             continue
         head_tree = adapter.parse_text(item.path, ctx.head_text(item.path))
         if head_tree is None:
@@ -484,7 +488,11 @@ def check_public_api(ctx: Context) -> list[Finding]:
     findings: list[Finding] = []
     for item in _relevant(ctx):
         adapter = languages.get(item.path)
-        if adapter is None or not ctx.config.is_api(item.path):
+        if (
+            adapter is None
+            or not ctx.config.is_api(item.path)
+            or ctx.config.is_metric_excluded(item.path)
+        ):
             continue
         if item.status == "A" or not languages.same_language(item.base_path, item.path):
             continue

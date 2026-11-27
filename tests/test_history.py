@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 
 from aedificatoria import history
@@ -45,6 +46,33 @@ def test_history_detects_new_cycle(repo: Path, commit, write):
 
     points = history.evaluate(repo, Config(), limit=5)
     assert any("new package cycle" in item.message for item in points[-1].regressions)
+
+
+def test_history_all_includes_side_branch(repo: Path, commit, write):
+    write(repo, "base.py", "value = 1\n")
+    commit(repo, "base")
+    branch = subprocess.check_output(
+        ["git", "-C", str(repo), "rev-parse", "--abbrev-ref", "HEAD"], text=True
+    ).strip()
+    subprocess.run(
+        ["git", "-C", str(repo), "checkout", "-q", "-b", "feature"], check=True
+    )
+    write(repo, "feature.py", "def feature() -> int:\n    return 1\n")
+    commit(repo, "feature work")
+    subprocess.run(["git", "-C", str(repo), "checkout", "-q", branch], check=True)
+    write(repo, "main.py", "value = 2\n")
+    commit(repo, "main work")
+    subprocess.run(
+        ["git", "-C", str(repo), "merge", "-q", "--no-ff", "feature", "-m", "merge feature"],
+        check=True,
+    )
+
+    first_parent = history.evaluate(repo, Config(), limit=10)
+    side_branch = history.evaluate(repo, Config(), limit=10, all_commits=True)
+    assert "feature work" not in {point.subject for point in first_parent}
+    assert "feature work" in {point.subject for point in side_branch}
+    feature = next(point for point in side_branch if point.subject == "feature work")
+    assert feature.impact > 0
 
 
 def test_history_parallel_matches_sequential(repo: Path, commit, write):

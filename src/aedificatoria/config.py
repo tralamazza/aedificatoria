@@ -77,6 +77,12 @@ _DEFAULT_TEST_CONFIG_PATHS = (
     "**/vitest.setup.*",
 )
 
+_DEFAULT_METRIC_EXCLUDES = (
+    "docs/**",
+    "examples/**",
+    "benchmarks/**",
+)
+
 _DEFAULT_API_PATHS = (
     "**/*.py",
     "**/*.rs",
@@ -108,6 +114,7 @@ class Config:
     test_paths: tuple[str, ...] = _DEFAULT_TEST_PATHS
     test_config_paths: tuple[str, ...] = _DEFAULT_TEST_CONFIG_PATHS
     api_paths: tuple[str, ...] = _DEFAULT_API_PATHS
+    metric_excludes: tuple[str, ...] = _DEFAULT_METRIC_EXCLUDES
     allow_new_dependencies: tuple[str, ...] = ()
     forbidden_edges: tuple[ForbiddenEdge, ...] = ()
     baseline_path: str = "aed-baseline.json"
@@ -133,7 +140,21 @@ class Config:
         return matches(path, self.test_paths) or path.rsplit("/", 1)[-1] == "conftest.py"
 
     def is_api(self, path: str) -> bool:
-        return matches(path, self.api_paths) and not self.is_test(path)
+        return (
+            not self.is_private(path)
+            and matches(path, self.api_paths)
+            and not self.is_test(path)
+        )
+
+    def is_private(self, path: str) -> bool:
+        return any(
+            part.startswith("_") and part != "__init__.py"
+            for part in path.replace("\\", "/").split("/")
+            if part
+        )
+
+    def is_metric_excluded(self, path: str) -> bool:
+        return matches(path, self.metric_excludes)
 
     def is_one_way_door(self, path: str) -> bool:
         return matches(path, self.one_way_doors)
@@ -270,6 +291,7 @@ def load_config(repo: Path, path: str | Path | None = None) -> Config:
         test_paths=_as_tuple(aed.get("test_paths"), _DEFAULT_TEST_PATHS),
         test_config_paths=_as_tuple(aed.get("test_config_paths"), _DEFAULT_TEST_CONFIG_PATHS),
         api_paths=_as_tuple(aed.get("api_paths"), _DEFAULT_API_PATHS),
+        metric_excludes=_as_tuple(aed.get("metric_excludes"), _DEFAULT_METRIC_EXCLUDES),
         allow_new_dependencies=_as_tuple(aed.get("allow_new_dependencies"), ()),
         forbidden_edges=tuple(edges),
         baseline_path=str(aed.get("baseline_path", "aed-baseline.json")),

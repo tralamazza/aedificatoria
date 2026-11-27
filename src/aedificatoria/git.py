@@ -117,6 +117,31 @@ def diff_stats(repo: Path, base: str | None, head: str) -> tuple[int, int]:
     return files, lines
 
 
+def history_graph(
+    repo: Path,
+    limit: int,
+    since: str | None = None,
+    head: str = "HEAD",
+) -> list[tuple[str, tuple[str, ...], str, str]]:
+    """Return up to `limit` reachable commits with parents, oldest first."""
+    revision = f"{since}..{head}" if since else head
+    proc = _git(
+        repo,
+        "log",
+        "--topo-order",
+        f"--max-count={max(1, limit)}",
+        "--format=%H%x09%P%x09%aI%x09%s",
+        revision,
+    )
+    rows: list[tuple[str, tuple[str, ...], str, str]] = []
+    for line in os.fsdecode(proc.stdout).splitlines():
+        parts = line.split("\t", 3)
+        if len(parts) == 4:
+            rows.append((parts[0], tuple(parts[1].split()), parts[2], parts[3]))
+    rows.reverse()
+    return rows
+
+
 def _numstat(repo: Path, base: str) -> dict[str, tuple[int, int, bool]]:
     proc = _git(repo, "diff", "--numstat", base, "--")
     stats: dict[str, tuple[int, int, bool]] = {}

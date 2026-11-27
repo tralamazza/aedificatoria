@@ -69,6 +69,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="GitHub owner/repo or GitLab full project path (default: origin)",
     )
+    hist.add_argument(
+        "--all",
+        action="store_true",
+        help="Analyze all reachable commits with parent-aware comparisons, not only first-parent",
+    )
     hist.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
     hist.add_argument(
         "--jobs",
@@ -184,6 +189,7 @@ def cmd_history(args: argparse.Namespace) -> int:
             since=args.since,
             head=args.head or "HEAD",
             jobs=max(1, args.jobs),
+            all_commits=args.all,
         )
         source = None
         header = "first-parent commits"

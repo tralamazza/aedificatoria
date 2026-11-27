@@ -273,3 +273,14 @@ def test_config_defaults_cover_js_ts():
     assert config.is_test_config("jest.config.ts")
     assert config.is_test_config("vitest.config.mts")
     assert verdict([]) == "allow"
+
+
+def test_private_modules_and_metric_scope():
+    config = Config()
+    assert not config.is_api("src/pkg/_internal.py")
+    assert not config.is_api("src/_pkg/mod.py")
+    assert config.is_api("src/pkg/__init__.py")
+    assert config.is_metric_excluded("docs/conf.py")
+    assert config.is_metric_excluded("examples/app.py")
+    assert config.is_metric_excluded("benchmarks/bench.py")
+    assert not config.is_metric_excluded("src/app.py")

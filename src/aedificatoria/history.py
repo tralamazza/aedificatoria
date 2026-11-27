@@ -23,11 +23,36 @@ from .git import (
     commit_parents,
     diff_stats,
     history_commits,
+    history_graph,
 )
 from .model import Finding
 from .pyast import strongly_connected
 
 _SQUASH_PR = re.compile(r"\(#(\d+)\)\s*$")
+
+_IMPACT_WEIGHTS = (
+    ("new package cycle", 10),
+    ("public symbol", 5),
+    ("new dependencies", 4),
+    ("new package edges", 3),
+    ("total complexity", 2),
+    ("`", 2),
+    ("public API grew", 1),
+    ("test `", 1),
+    ("large atomic", 1),
+)
+
+
+def _impact(findings: list[Finding]) -> int:
+    score = 0
+    for item in findings:
+        for prefix, weight in _IMPACT_WEIGHTS:
+            if item.message.startswith(prefix):
+                score += weight
+                break
+        else:
+            score += 1
+    return score
 
 
 @dataclass(frozen=True)
@@ -47,6 +72,7 @@ class HistoryPoint:
     tests: int
     assertions: int
     regressions: tuple[Finding, ...]
+    impact: int = 0
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -66,6 +92,7 @@ class HistoryPoint:
                 "assertions": self.assertions,
             },
             "regressions": [item.as_dict() for item in self.regressions],
+            "impact": self.impact,
         }
 
 
@@ -81,7 +108,9 @@ def _total(values: object) -> int:
 
 def _count(values: object) -> int:
     mapping = values if isinstance(values, dict) else {}
-    return sum(len(items) for items in mapping.values() if isinstance(items, list))
+    return sum(
+        len(items) for items in mapping.values() if isinstance(items, (list, dict))
+    )
 
 
 def _test_counts(values: object) -> tuple[int, int]:
@@ -225,6 +254,7 @@ def _point(
         tests=summary["tests"],
         assertions=summary["assertions"],
         regressions=tuple(regressions),
+        impact=_impact(regressions),
     )
 
 
@@ -253,6 +283,38 @@ def _collect_metrics(
         )
 
 
+def _evaluate_all(
+    repo: Path,
+    config: Config,
+    limit: int,
+    since: str | None,
+    head: str,
+    jobs: int,
+) -> list[HistoryPoint]:
+    rows = history_graph(repo, limit, since, head)
+    metrics = _collect_metrics(repo, [row[0] for row in rows], config, jobs)
+    cache = dict(zip((row[0] for row in rows), metrics))
+    points: list[HistoryPoint] = []
+    for commit, parents, date, subject in rows:
+        parent = parents[0] if parents else None
+        if parent is not None and parent not in cache:
+            cache[parent] = _collect_commit(str(repo), parent, config)
+        current = cache[commit]
+        previous = cache.get(parent) if parent is not None else None
+        files, lines = diff_stats(repo, parent, commit)
+        regressions = (
+            []
+            if previous is None
+            else _regressions(previous, current, config, commit, subject)
+        )
+        kind, pr = _kind(parents, subject)
+        regressions.extend(
+            _atomic_finding(parents, kind, pr, files, lines, config, commit, subject)
+        )
+        points.append(_point(commit, date, subject, parents, files, lines, current, regressions))
+    return points
+
+
 def evaluate(
     repo: Path,
     config: Config,
@@ -260,11 +322,15 @@ def evaluate(
     since: str | None = None,
     head: str = "HEAD",
     jobs: int = 1,
+    all_commits: bool = False,
 ) -> list[HistoryPoint]:
+    if all_commits:
+        return _evaluate_all(repo, config, limit, since, head, jobs)
+
     rows = history_commits(repo, limit, since, head)
     metrics = _collect_metrics(repo, [row[0] for row in rows], config, jobs)
-    points: list[HistoryPoint] = []
-    previous: dict[str, Any] | None = None
+    points = []
+    previous = None
     for (commit, date, subject), current in zip(rows, metrics):
         parents = commit_parents(repo, commit)
         base = parents[0] if parents else None
@@ -329,7 +395,7 @@ def evaluate_forge(
 def worst(points: list[HistoryPoint], limit: int = 5) -> list[HistoryPoint]:
     ranked = sorted(
         (point for point in points if point.regressions),
-        key=lambda point: (-len(point.regressions), point.commit),
+        key=lambda point: (-point.impact, -len(point.regressions), point.commit),
     )
     return ranked[:limit]
 
@@ -346,7 +412,7 @@ def render_text(points: list[HistoryPoint], header: str = "first-parent commits"
     lines = [
         f"AEDIFICATORIA HISTORY  {header}",
         "",
-        "commit    date        kind        complexity      api       deps  edges  tests  assert  churn       regr",
+        "commit    date        kind        complexity      api       deps  edges  tests  assert  churn       regr  impact",
     ]
     previous: HistoryPoint | None = None
     for point in points:
@@ -357,7 +423,7 @@ def render_text(points: list[HistoryPoint], header: str = "first-parent commits"
             f"{_delta(point.api, previous.api if previous else None):>8}  "
             f"{_delta(point.dependencies, previous.dependencies if previous else None):>5}  "
             f"{point.edges:>5}  {point.tests:>5}  {point.assertions:>6}  "
-            f"{point.files:>4}f/{point.lines:<5}l  {len(point.regressions):>4}"
+            f"{point.files:>4}f/{point.lines:<5}l  {len(point.regressions):>4}  {point.impact:>6}"
         )
         previous = point
     ranked = worst(points)
@@ -368,7 +434,8 @@ def render_text(points: list[HistoryPoint], header: str = "first-parent commits"
             marker = f" [squash #{point.pr}]" if point.kind == "squash" else ""
             lines.append(
                 f"{point.commit[:8]} {point.subject}{marker} — "
-                f"{point.files}f/{point.lines}l — {len(point.regressions)} regression(s)"
+                f"{point.files}f/{point.lines}l — {len(point.regressions)} regression(s), "
+                f"impact {point.impact}"
             )
             for item in point.regressions[:4]:
                 location = f" ({item.path})" if item.path else ""

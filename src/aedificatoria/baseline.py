@@ -17,7 +17,7 @@ from .config import Config
 from .git import tracked_source_files
 from .model import Finding
 
-VERSION = 1
+VERSION = 2
 _EVIDENCE = "Run `aed baseline` with an accepted ADR to reset the ratchet."
 
 
@@ -34,6 +34,8 @@ def _mapping(value: object) -> dict[str, Any]:
 
 
 def _collect_file(root: Path, rel: str, config: Config, data: dict[str, Any]) -> None:
+    if config.is_metric_excluded(rel):
+        return
     adapter = languages.get(rel)
     if adapter is None:
         return
@@ -55,7 +57,7 @@ def _collect_file(root: Path, rel: str, config: Config, data: dict[str, Any]) ->
     if config.is_api(rel):
         surface = adapter.public_api(tree)
         if surface:
-            data["api"][rel] = sorted(surface)
+            data["api"][rel] = dict(sorted(surface.items()))
 
 
 def _dependencies(root: Path, config: Config) -> list[str]:
@@ -96,7 +98,7 @@ def load(root: Path, path: str) -> dict[str, Any] | None:
         data = json.loads(candidate.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise BaselineError(str(exc)) from exc
-    if not isinstance(data, dict) or data.get("version") != VERSION:
+    if not isinstance(data, dict) or data.get("version") not in {1, VERSION}:
         raise BaselineError(f"unsupported baseline format (expected version {VERSION})")
     return data
 
@@ -154,14 +156,23 @@ def _complexity_findings(
     return findings
 
 
+def _api_symbols(value: object) -> dict[str, str]:
+    if isinstance(value, dict):
+        return {str(name): str(signature) for name, signature in value.items()}
+    if isinstance(value, list):
+        return {str(name): "" for name in value}
+    return {}
+
+
 def _api_findings(baseline: dict[str, Any], head: dict[str, Any], config: Config) -> list[Finding]:
     base_map = _mapping(baseline.get("api"))
     head_map = _mapping(head.get("api"))
     findings: list[Finding] = []
     for file, symbols in base_map.items():
-        current = set(head_map.get(file) or [])
-        for symbol in symbols if isinstance(symbols, list) else []:
-            if symbol not in current:
+        base_symbols = _api_symbols(symbols)
+        head_symbols = _api_symbols(head_map.get(file))
+        for symbol, signature in base_symbols.items():
+            if symbol not in head_symbols:
                 findings.append(
                     Finding(
                         "baseline",
@@ -171,8 +182,19 @@ def _api_findings(baseline: dict[str, Any], head: dict[str, Any], config: Config
                         evidence=_EVIDENCE,
                     )
                 )
-    base_total = sum(len(value) for value in base_map.values() if isinstance(value, list))
-    head_total = sum(len(value) for value in head_map.values() if isinstance(value, list))
+            elif signature and head_symbols[symbol] and signature != head_symbols[symbol]:
+                findings.append(
+                    Finding(
+                        "baseline",
+                        "error",
+                        f"public symbol `{symbol}` signature changed "
+                        f"{signature} -> {head_symbols[symbol]} since baseline",
+                        path=file,
+                        evidence=_EVIDENCE,
+                    )
+                )
+    base_total = sum(len(_api_symbols(value)) for value in base_map.values())
+    head_total = sum(len(_api_symbols(value)) for value in head_map.values())
     if head_total > base_total + max(0, config.max_baseline_api_growth):
         findings.append(
             Finding(

@@ -42,6 +42,34 @@ def test_baseline_clean_after_snapshot(repo: Path, commit, write):
     assert verdict(findings) == "allow"
 
 
+def test_baseline_detects_signature_change(repo: Path, commit, write):
+    write(repo, "service.py", "def handle(x: int) -> int:\n    return x\n")
+    snapshot(repo)
+    commit(repo)
+    write(repo, "service.py", "def handle(x: int, y: int) -> int:\n    return x + y\n")
+
+    findings = evaluate(repo, Config())
+    assert any(
+        item.rule == "baseline" and "signature changed" in item.message for item in findings
+    )
+
+
+def test_baseline_ignores_private_api_and_examples(repo: Path, commit, write):
+    write(repo, "src/pkg/__init__.py", "")
+    write(repo, "src/pkg/_internal.py", "def hidden(x: int) -> int:\n    return x\n")
+    write(repo, "examples/app.py", "def sample(x: int) -> int:\n    return x\n")
+    snapshot(repo)
+    commit(repo)
+    write(repo, "src/pkg/_internal.py", "def hidden(x: int, y: int) -> int:\n    return x + y\n")
+    write(repo, "examples/app.py", "def sample(x: int) -> int:\n" + "".join(
+        f"    if x == {index}:\n        return {index}\n" for index in range(8)
+    ) + "    return -1\n")
+
+    findings = evaluate(repo, Config(max_complexity=3, complexity_delta=0))
+    assert not any(item.rule in {"public-api", "complexity"} for item in findings)
+    assert not any(item.rule == "baseline" for item in findings)
+
+
 def test_baseline_blocks_small_complexity_growth(repo: Path, commit, write):
     write(repo, "risk.py", "def score(x: int) -> int:\n    return x\n")
     snapshot(repo)

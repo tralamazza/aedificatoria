@@ -86,6 +86,7 @@ base = "HEAD"
 adr_dir = "docs/decisions"
 source_roots = ["src", "."]
 allow_new_dependencies = []
+metric_excludes = ["docs/**", "examples/**", "benchmarks/**"]
 baseline_path = "aed-baseline.json"
 cargo_advisory = true
 require_adr_for_large_change = true
@@ -119,10 +120,12 @@ disable a check.
 ### Persistent baseline
 
 `aed baseline` writes a deterministic snapshot of per-file/function complexity,
-public API symbols, external dependencies, package edges, and per-test assertion
-counts to `aed-baseline.json`. `aed check` compares the working tree against that
-snapshot, not only against the immediate base. Small increments therefore
-accumulate against the baseline instead of resetting every commit.
+public API symbols with signatures, external dependencies, package edges, and
+per-test assertion counts to `aed-baseline.json`. `aed check` compares the working
+tree against that snapshot, not only against the immediate base. Small increments
+therefore accumulate against the baseline instead of resetting every commit.
+Public API ignores private paths, and `metric_excludes` keeps docs/examples out of
+production metrics; same-name signature changes are reported.
 
 The four growth caps default to `0`: no net complexity, API, dependency, or edge
 growth without a deliberate refresh. Set positive caps for planned expansion.
@@ -150,15 +153,25 @@ commits and ranks them by metric regressions:
 ```sh
 aed history --limit 30
 aed history --limit 100 --jobs 8
+aed history --all --limit 400 --jobs 8
 aed history --since v1.0.0 --json
 ```
 
 Each commit is checked out into a temporary worktree and measured with the same
 metrics as the baseline. Consecutive commits are compared with zero growth caps,
 so the report surfaces per-function and total complexity growth, API removals and
-growth, new dependencies, new package edges, new cycles, removed tests, and
-assertion drops. It prints a timeline and a ranked "where it went bad" section;
-`--json` returns the same data. It is a report, not a gate: exit 0, no writes.
+signature changes, new dependencies, new package edges, new cycles, removed tests,
+and assertion drops. It prints a timeline and a ranked "where it went bad"
+section; `--json` returns the same data. It is a report, not a gate: exit 0, no
+writes.
+
+`--all` walks every reachable commit and compares it to its **first parent**
+instead of walking only the first-parent chain. Side-branch commits then appear
+individually; merge commits remain net diffs. Public API ignores private paths
+(`_module.py`, `_dir/`), and `metric_excludes` removes docs/examples/benchmarks
+from production metrics. The baseline stores API signatures, so same-name
+signature breaks are reported. "Where it went bad" is ranked by a weighted
+`impact` score (cycles/API/dependencies above test inventory), not raw count.
 
 Metric collection is independent per commit. `--jobs N` runs it in process
 workers with isolated worktrees and preserves order; the output is identical to
@@ -309,10 +322,12 @@ the change. Hidden tests should still live outside the agent's writable tree.
 - The baseline keys metrics by file plus symbol/function name. Renames look like
   removals plus additions and need a baseline refresh; cumulative file/line churn
   is still judged per diff.
-- History audits are first-parent only, use the current configuration for every
-  commit, and do not re-evaluate historical ADRs or one-way doors. Squash merges
-  are atomic: history detects PR-style squashes and flags oversized ones, but the
-  intermediate commits are unrecoverable. Check the PR branch before squashing.
+- History audits are first-parent by default, use the current configuration for
+  every commit, and do not re-evaluate historical ADRs or one-way doors. `--all`
+  adds side-branch commits but merge commits are still first-parent net diffs.
+  Squash merges are atomic: history detects PR-style squashes and flags oversized
+  ones, but the intermediate commits are unrecoverable. Check the PR branch
+  before squashing.
 - `--jobs` parallelizes local metric collection only; each worker holds a parser
   tree and a temporary worktree. Forge API modes remain sequential.
 - The GitHub/GitLab API fallbacks are opt-in and non-hermetic: they need
