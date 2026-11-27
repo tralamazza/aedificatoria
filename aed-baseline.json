@@ -33,6 +33,7 @@
       "parse_text": "(path:str,text:str|None)->CFile|None",
       "project_imports": "(root:Path,config:Config)->dict[str,tuple[str,int]]",
       "public_api": "(tree:CFile|None)->dict[str,str]",
+      "syntax_error": "(path:str,text:str|None)->tuple[int,str,str]|None",
       "test_info": "(tree:CFile|None)->TestInfo"
     },
     "src/aedificatoria/checks.py": {
@@ -142,6 +143,7 @@
       "parse_text": "(path:str,text:str|None)->JsFile|None",
       "project_imports": "(root:Path,config:Config)->dict[str,tuple[str,int]]",
       "public_api": "(tree:JsFile|None)->dict[str,str]",
+      "syntax_error": "(path:str,text:str|None)->tuple[int,str,str]|None",
       "test_info": "(tree:JsFile|None)->TestInfo"
     },
     "src/aedificatoria/languages.py": {
@@ -155,7 +157,8 @@
       "names": "()->list[str]",
       "package_graph": "(root:Path,config:Config)->tuple[set[tuple[str,str]],set[str]]",
       "project_imports": "(root:Path,config:Config)->dict[str,tuple[str,int,str]]",
-      "same_language": "(first:str,second:str)->bool"
+      "same_language": "(first:str,second:str)->bool",
+      "syntax_error": "(adapter:Adapter,path:str,text:str|None)->tuple[int,str,str]|None"
     },
     "src/aedificatoria/model.py": {
       "ChangedFile": "class()",
@@ -215,7 +218,11 @@
       "parse_text": "(_path:str,text:str|None)->RustFile|None",
       "project_imports": "(root:Path,config:Config)->dict[str,tuple[str,int]]",
       "public_api": "(tree:RustFile|None)->dict[str,str]",
+      "syntax_error": "(text:str|None)->tuple[int,str,str]|None",
       "test_info": "(tree:RustFile|None)->TestInfo"
+    },
+    "src/aedificatoria/syntax.py": {
+      "tree_sitter_error": "(tree:Tree,text:str)->tuple[int,str,str]|None"
     }
   },
   "complexity": {
@@ -293,6 +300,7 @@
       "parse_text": 9,
       "project_imports": 7,
       "public_api": 3,
+      "syntax_error": 3,
       "test_info": 2
     },
     "src/aedificatoria/checks.py": {
@@ -325,7 +333,7 @@
       "check_new_dependencies": 7,
       "check_one_way_doors": 12,
       "check_public_api": 5,
-      "check_syntax_errors": 7,
+      "check_syntax_errors": 8,
       "check_test_tampering": 14,
       "run_checks": 3
     },
@@ -518,6 +526,7 @@
       "parse_text": 2,
       "project_imports": 7,
       "public_api": 5,
+      "syntax_error": 2,
       "test_info": 2
     },
     "src/aedificatoria/languages.py": {
@@ -529,7 +538,8 @@
       "names": 2,
       "package_graph": 2,
       "project_imports": 3,
-      "same_language": 2
+      "same_language": 2,
+      "syntax_error": 5
     },
     "src/aedificatoria/model.py": {
       "ChangedFile.base_path": 2,
@@ -650,7 +660,12 @@
       "parse_text": 2,
       "project_imports": 7,
       "public_api": 2,
+      "syntax_error": 2,
       "test_info": 3
+    },
+    "src/aedificatoria/syntax.py": {
+      "_first_error": 5,
+      "tree_sitter_error": 4
     }
   },
   "dependencies": [
@@ -731,7 +746,11 @@
       "test_report_has_stable_rules": 1,
       "test_syntax_error_ignores_empty_python_file": 2,
       "test_syntax_error_ignores_pre_existing_failure": 1,
+      "test_syntax_error_on_new_cpp_failure": 1,
+      "test_syntax_error_on_new_javascript_failure": 1,
       "test_syntax_error_on_new_python_failure": 4,
+      "test_syntax_error_on_new_rust_failure": 1,
+      "test_syntax_error_on_new_typescript_failure": 1,
       "test_test_assertion_removal": 1,
       "test_test_removal_and_skip": 2
     },

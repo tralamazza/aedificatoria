@@ -19,6 +19,7 @@ from tree_sitter import Language, Node, Parser, Tree
 
 from .config import Config
 from .model import ImportRef, TestInfo
+from .syntax import tree_sitter_error
 
 NAME = "rust"
 EXTENSIONS = (".rs",)
@@ -72,6 +73,12 @@ def parse_text(_path: str, text: str | None) -> RustFile | None:
     if text is None:
         return None
     return RustFile(_PARSER.parse(text.encode("utf-8")), _path)
+
+
+def syntax_error(text: str | None) -> tuple[int, str, str] | None:
+    if text is None:
+        return None
+    return tree_sitter_error(_PARSER.parse(text.encode("utf-8")), text)
 
 
 def _field(node: Node | None, name: str) -> Node | None:

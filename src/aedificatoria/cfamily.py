@@ -15,6 +15,7 @@ from tree_sitter import Language, Node, Parser, Tree
 from .config import Config
 from .git import _SKIP_DIRS
 from .model import TestInfo
+from .syntax import tree_sitter_error
 
 NAME = "c_cpp"
 EXTENSIONS = (".c", ".h", ".cc", ".cpp", ".cxx", ".hpp", ".hh", ".hxx", ".ixx")
@@ -115,6 +116,13 @@ def parse_text(path: str, text: str | None) -> CFile | None:
             return c
         return cpp
     return None
+
+
+def syntax_error(path: str, text: str | None) -> tuple[int, str, str] | None:
+    parsed = parse_text(path, text)
+    if parsed is None or text is None:
+        return None
+    return tree_sitter_error(parsed.tree, text)
 
 
 def _name(node: Node | None) -> str:

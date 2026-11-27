@@ -88,6 +88,20 @@ def get(path: str) -> Adapter | None:
     for adapter in ADAPTERS:
         if path.endswith(adapter.extensions):
             return adapter
+
+
+def syntax_error(
+    adapter: Adapter, path: str, text: str | None
+) -> tuple[int, str, str] | None:
+    if adapter.name == "python":
+        return pyast.syntax_error(text)
+    if adapter.name == "rust":
+        return rust.syntax_error(text)
+    if adapter.name == "javascript":
+        return jsts.syntax_error(path, text)
+    if adapter.name == cfamily.NAME:
+        return cfamily.syntax_error(path, text)
+    return None
     return None
 
 

@@ -356,3 +356,39 @@ def test_syntax_error_ignores_empty_python_file(repo: Path, commit, write):
 
     findings = evaluate(repo, Config())
     assert not any(item.rule == "syntax-error" for item in findings)
+
+
+def test_syntax_error_on_new_rust_failure(repo: Path, commit, write):
+    write(repo, "src/lib.rs", "pub fn value() {}\n")
+    commit(repo)
+    write(repo, "src/lib.rs", "pub fn value( {\n")
+
+    findings = evaluate(repo, Config())
+    assert any(item.rule == "syntax-error" and item.path == "src/lib.rs" for item in findings)
+
+
+def test_syntax_error_on_new_javascript_failure(repo: Path, commit, write):
+    write(repo, "web/app.js", "const value = 1;\n")
+    commit(repo)
+    write(repo, "web/app.js", "const value = ;\n")
+
+    findings = evaluate(repo, Config())
+    assert any(item.rule == "syntax-error" and item.path == "web/app.js" for item in findings)
+
+
+def test_syntax_error_on_new_typescript_failure(repo: Path, commit, write):
+    write(repo, "web/app.ts", "const value: number = 1;\n")
+    commit(repo)
+    write(repo, "web/app.ts", "const value: number = ;\n")
+
+    findings = evaluate(repo, Config())
+    assert any(item.rule == "syntax-error" and item.path == "web/app.ts" for item in findings)
+
+
+def test_syntax_error_on_new_cpp_failure(repo: Path, commit, write):
+    write(repo, "src/main.cpp", "int main() { return 0; }\n")
+    commit(repo)
+    write(repo, "src/main.cpp", "int main( { return 0; }\n")
+
+    findings = evaluate(repo, Config())
+    assert any(item.rule == "syntax-error" and item.path == "src/main.cpp" for item in findings)

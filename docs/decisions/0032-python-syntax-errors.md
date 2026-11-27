@@ -2,6 +2,7 @@
 
 - Status: accepted
 - Date: 2026-11-27
+- Amended by: 0033 (tree-sitter adapters)
 
 ## Context
 

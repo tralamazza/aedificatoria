@@ -21,6 +21,7 @@ from tree_sitter import Language, Node, Parser, Tree
 
 from .config import Config
 from .model import ImportRef, TestInfo
+from .syntax import tree_sitter_error
 
 NAME = "javascript"
 EXTENSIONS = (".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".mts", ".cts")
@@ -168,6 +169,12 @@ def parse_text(path: str, text: str | None) -> JsFile | None:
         return None
     tree = _parse_cached(_grammar(path), text)
     return JsFile(tree, path)
+
+
+def syntax_error(path: str, text: str | None) -> tuple[int, str, str] | None:
+    if text is None:
+        return None
+    return tree_sitter_error(_parse_cached(_grammar(path), text), text)
 
 
 def _field(node: Node | None, name: str) -> Node | None:

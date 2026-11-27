@@ -16,7 +16,6 @@ from .pyast import (
     _package_initializers,
     _resolved_public_api,
     strongly_connected,
-    syntax_error,
 )
 
 
@@ -62,19 +61,26 @@ def check_syntax_errors(ctx: Context) -> list[Finding]:
         if item.is_deleted:
             continue
         adapter = languages.get(item.path)
-        if adapter is None or adapter.name != "python":
+        if adapter is None:
             continue
-        error = syntax_error(ctx.head_text(item.path))
+        head_text = ctx.head_text(item.path)
+        error = languages.syntax_error(adapter, item.path, head_text)
         if error is None:
             continue
-        if syntax_error(ctx.base_text(item.base_path)) is not None:
+        base_adapter = languages.get(item.base_path)
+        base_text = ctx.base_text(item.base_path)
+        if (
+            base_adapter is not None
+            and languages.syntax_error(base_adapter, item.base_path, base_text) is not None
+        ):
             continue
         line, message, evidence = error
+        detail = "" if message in {"syntax error", "missing syntax"} else f": {message}"
         findings.append(
             Finding(
                 "syntax-error",
                 "error",
-                f"Python syntax error: {message}",
+                f"Syntax error{detail}",
                 path=item.path,
                 line=line,
                 evidence=evidence,
