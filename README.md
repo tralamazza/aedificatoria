@@ -130,9 +130,15 @@ alternatives, consequences, invariants, and rollback path for a consequential
 change. Create one with `aed adr new TITLE`.
 
 An accepted ADR needs a `# title`, `- Status: accepted`, and a `## Decision`
-section. Accepted ADRs authorize one-way-door, verifier-config, baseline, and
-public-API changes; `adr-quality` checks only that structure, not whether the
-decision itself is good.
+section. Only accepted ADRs authorize one-way-door, verifier-config, baseline,
+and public-API changes; proposed ADRs produce findings. `adr-quality` checks only
+structure, not whether the decision itself is good.
+
+`aed baseline`, `aed adr new`, and `aed init` reject absolute paths, parent
+traversal, and symlinked targets. Source scanners honor Git ignores and skip
+symlinked or oversized files. Accepted ADRs are a human review gate; use
+CODEOWNERS and branch protection for `aed.toml`, `aed-baseline.json`,
+`docs/decisions/**`, hooks, and workflows.
 
 ## Configuration
 
@@ -234,10 +240,10 @@ Harness policy:
 ### CI
 
 ```yaml
-- uses: actions/checkout@v4
+- uses: actions/checkout@v7
   with:
     fetch-depth: 0
-- uses: actions/setup-python@v5
+- uses: actions/setup-python@v7
   with:
     python-version: "3.11"
 - run: pip install -e .
