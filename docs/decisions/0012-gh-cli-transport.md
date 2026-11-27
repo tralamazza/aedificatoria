@@ -2,6 +2,7 @@
 
 - Status: accepted
 - Date: 2026-11-27
+- Supersedes: 0011 (urllib transport)
 
 ## Context
 
@@ -27,7 +28,7 @@ Use `gh api` as the transport for `--github-pr`:
 - No direct HTTP code, token parsing, or `GITHUB_API_URL` remains.
 
 `aed check` still never imports or calls the GitHub client. `--github-pr` remains
-report-only, first-parent within the PR commit list, and explicit.
+report-only, commit-order within the PR commit list, and explicit.
 
 ## Alternatives considered
 

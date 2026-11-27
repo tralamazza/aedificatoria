@@ -2,6 +2,7 @@
 
 - Status: accepted
 - Date: 2026-11-27
+- Amended by: 0010-0013 (opt-in recovery), 0019 (rebase marker caveat)
 
 ## Context
 
@@ -27,16 +28,18 @@ Make history squash-aware and move the authoritative audit to the PR branch:
 - Show kind, churn, and the squash marker in the timeline and the ranked
   regressions.
 
-Do not call GitHub or any network service to recover squashed commits. The tool
-stays offline and Git-only. Instead, document the correct workflow: run
+The default history path stays offline and Git-only. Opt-in PR/MR recovery was
+added later in ADRs 0010-0013 and never affects `aed check`. Document the correct
+offline workflow too: run
 `aed history --since <base>` and `aed check --base <base>` on the PR branch before
 squashing, or use a merge/rebase merge when the internal history matters. The
 existing push/pull-request CI already audits the PR range before merge.
 
 ## Alternatives considered
 
-- Recover PR commits from GitHub's API. Rejected: network, credentials, and
-  repository-host coupling in a hermetic guard.
+- Recover PR commits from GitHub's API in the default path. Rejected: network,
+  credentials, and repository-host coupling in a hermetic guard. Opt-in recovery
+  was added later in ADRs 0010-0013.
 - Analyze deleted branch refs. Rejected: squashes usually delete the branch, and
   local refs are not portable.
 - Flag every single-parent commit. Rejected: too noisy; only oversized ones are
@@ -58,7 +61,7 @@ oversized single-parent commit is treated as atomic.
 - History remains read-only and exits 0.
 - Churn is computed against the first parent.
 - Merge commits are never reported as squashes.
-- No network or GitHub API calls.
+- No network in the default path; opt-in forge recovery is separate (0010-0013).
 - The push/PR guard remains the blocking gate; history is diagnostic.
 
 ## Rollback

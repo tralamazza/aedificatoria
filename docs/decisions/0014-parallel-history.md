@@ -15,7 +15,7 @@ unpleasant. The sequential comparison and reporting must stay deterministic.
 
 Add `--jobs N` (`-j`) to `aed history` for local history:
 
-- Precompute commit metadata (parents, churn) sequentially in commit order.
+- Compute commit metadata (parents, churn) sequentially in commit order.
 - Collect per-commit metrics in a `ProcessPoolExecutor` with `N` workers; each
   task gets the repository path, commit SHA, and the frozen `Config`.
 - Each worker creates and removes its own temporary worktree via

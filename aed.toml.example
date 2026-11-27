@@ -16,9 +16,23 @@ source_roots = ["src", "."]
 #   "**/openapi*.yaml", "**/openapi*.json",
 # ]
 
+# exclude = [
+#   ".git/**", ".venv/**", "venv/**", "node_modules/**", "__pycache__/**",
+#   ".pytest_cache/**", ".mypy_cache/**", ".ruff_cache/**", "dist/**", "build/**",
+#   "target/**", "coverage/**", ".next/**", ".nuxt/**", ".svelte-kit/**",
+#   ".turbo/**", ".cache/**", "out/**", "**/*.egg-info/**",
+# ]
+
 # test_paths = [
 #   "tests/**", "**/tests/**", "**/test_*.py", "**/*_test.py",
 #   "**/*_test.rs", "**/*_tests.rs", "**/*.test.*", "**/*.spec.*",
+#   "**/__tests__/**", "**/__test__/**",
+# ]
+# test_config_paths = [
+#   "conftest.py", "**/conftest.py", "pytest.ini", "tox.ini", "setup.cfg",
+#   ".coveragerc", "**/jest.config.*", "**/vitest.config.*", "**/.mocharc.*",
+#   "**/karma.conf.*", "**/playwright.config.*", "**/cypress.config.*",
+#   "**/jest.setup.*", "**/vitest.setup.*",
 # ]
 # api_paths = ["**/*.py", "**/*.rs", "**/*.js", "**/*.jsx", "**/*.ts", "**/*.tsx", "**/*.mjs", "**/*.cjs", "**/*.mts", "**/*.cts"]
 # metric_excludes = ["docs/**", "examples/**", "benchmarks/**"]

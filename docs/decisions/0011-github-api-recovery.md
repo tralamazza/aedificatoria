@@ -1,7 +1,11 @@
 # 0011. Opt-in GitHub API recovery for history audits
 
-- Status: accepted
+- Status: superseded
 - Date: 2026-11-27
+- Superseded by: 0012 (gh CLI transport)
+
+> Historical record: the `urllib` transport below was replaced by `gh api` in
+> ADR 0012. The PR-recovery analysis design remains current.
 
 ## Context
 

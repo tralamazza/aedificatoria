@@ -2,6 +2,10 @@
 
 - Status: accepted
 - Date: 2026-11-27
+- Amended by: 0004 (JS/TS), 0005 (Rust tree-sitter)
+
+> Later: Rust now uses pinned tree-sitter per ADR 0005. This record documents
+> the adapter architecture; the dependency-free Rust lexer is historical.
 
 ## Context
 
@@ -17,11 +21,11 @@ Introduce `languages.py`, a registry of adapters with a fixed surface:
 `package_edges`, `project_imports`, and `local_packages`. Checks select an
 adapter by file extension and never import a language module directly.
 
-Rust support is a dependency-free lexer plus brace matcher in `rust.py`. It
-analyses `use`/`extern crate` imports, `pub` items and impl/trait methods,
-branch-count complexity, and inline `#[cfg(test)]` tests including `assert!`
-macros and `#[ignore]`. Package-level edges are crates, discovered from
-`Cargo.toml` manifests; Cargo dependency tables feed the new-dependency
+Rust support initially used a dependency-free lexer plus brace matcher in
+`rust.py`. It analysed `use`/`extern crate` imports, `pub` items and impl/trait
+methods, branch-count complexity, and inline `#[cfg(test)]` tests including
+`assert!` macros and `#[ignore]`. Package-level edges were crates, discovered
+from `Cargo.toml` manifests; Cargo dependency tables fed the new-dependency
 allowlist. Shared `ImportRef` and `TestInfo` types moved to `model.py` so
 language modules do not depend on each other.
 
@@ -37,14 +41,16 @@ language modules do not depend on each other.
 ## Consequences
 
 Adding a language is one adapter module and one registry entry. The checks stay
-mechanical and language-independent. Rust analysis is item-level and lexical:
-struct fields and enum variants are not compared, macros are not expanded, and
-crate-level edges are coarser than module-level ones.
+mechanical and language-independent. Under the original Rust lexer, analysis was
+item-level and lexical: struct fields and enum variants were not compared, macros
+were not expanded, and crate-level edges are coarser than module-level ones.
+ADRs 0004/0005 replaced that lexer with tree-sitter for Rust and JS/TS.
 
 ## Invariants
 
 - Checks never import `pyast` or `rust` directly; they use `languages.get`.
-- Adapter analysis stays deterministic and dependency-free.
+- Adapter analysis stays deterministic. The original dependency-free policy was
+  superseded for Rust/JS/TS by ADRs 0004/0005.
 - Python behaviour is unchanged; the default API and test paths add Rust files.
 - Rust test modules inside production files are watched for deleted or skipped
   tests and dropped assertions.

@@ -19,10 +19,13 @@ and temporary worktree; order and JSON match `--jobs 1`. Keep `N <= CPU cores`.
 Forge API modes do not use `--jobs` and cannot be combined with `--since` or
 `--head`.
 
-`--json` emits `{kind, source, commits: [...]}`. Each commit contains `commit`,
+`--json` emits `{kind, source?, commits, worst}`. Each commit contains `commit`,
 `date`, `subject`, `parents`, `kind`, `pr`, `churn`, `metrics`, `regressions`,
-and `impact`. The first commit in a window has no previous commit and therefore
-no regressions; this is expected, not evidence of a clean commit.
+and `impact`. `worst` is the ranked subset of commits with regressions. In
+first-parent mode, the first commit in a window has no previous commit and
+therefore no regressions; this is expected, not evidence of a clean commit. In
+`--all` mode, a parent outside the window is loaded on demand, so the first listed
+commit can still have regressions.
 
 ## Topology semantics
 

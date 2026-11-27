@@ -2,6 +2,10 @@
 
 - Status: accepted
 - Date: 2026-11-27
+- Amended by: 0011-0013 (opt-in forge API recovery)
+
+> Later: the default `--head` path stays offline. Opt-in `--github-pr`/
+> `--gitlab-mr` recovery was added by ADRs 0011-0013.
 
 ## Context
 
@@ -19,9 +23,9 @@ contains every branch commit.
 ## Decision
 
 Add `--head <ref>` to `aed history`. It walks the first-parent chain ending at
-that revision instead of `HEAD`, and works with any local ref or commit. Aed
-stays offline: it never fetches or calls a hosting API. The documented recovery
-workflow is:
+that revision instead of `HEAD`, and works with any local ref or commit. The
+default path stays offline: it never fetches or calls a hosting API. The
+documented recovery workflow is:
 
 ```sh
 git fetch origin '+refs/pull/*/head:refs/remotes/origin/pr/*'
@@ -35,9 +39,9 @@ saved, the internals are unrecoverable; the command cannot invent them. Persist
 
 ## Alternatives considered
 
-- Call the GitHub API from `aed history`. Rejected: network, credentials, and
-  host coupling in a deterministic offline guard. Users can export the API data
-  themselves and audit the resulting commit graph if needed.
+- Call the GitHub API from the default `aed history` path. Rejected: network,
+  credentials, and host coupling in a deterministic offline guard. Opt-in
+  recovery was added later by ADRs 0011-0013.
 - Reconstruct commits from the squash message. Rejected: messages contain no
   trees and are not authoritative.
 - Require merge commits. Rejected: merge strategy is a repository policy; the
@@ -55,7 +59,8 @@ branches, and recovered commits.
 ## Invariants
 
 - `--head` is read-only and works with any resolvable revision.
-- No network access; fetching is the user's explicit action.
+- No network access in the default path; fetching is the user's explicit action.
+  Opt-in forge recovery is separate (ADRs 0011-0013).
 - The first-parent chain of the chosen ref is what gets audited.
 - If a revision cannot be resolved, the command fails with a Git error.
 

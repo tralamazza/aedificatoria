@@ -2,6 +2,10 @@
 
 - Status: accepted
 - Date: 2026-11-27
+- Amended by: 0015 (--all, impact ranking, API scope)
+
+> Later: first-parent remains the default; `--all` adds side-branch commits per
+> ADR 0015. The first-parent consequence below describes the default only.
 
 ## Context
 
@@ -45,9 +49,10 @@ weakenings; the history command answers metric questions, not policy questions.
 
 History audits cost roughly `limit × repository size`; twenty commits on a small
 repository take under a second, larger repositories proportionally longer.
-First-parent only means merge commits and side branches are skipped. The report
-uses current config and zero caps, so it intentionally surfaces growth the
-baseline has already accepted. Renames appear as removals plus additions.
+First-parent (the default) means merge commits and side branches are skipped;
+`--all` (ADR 0015) adds side branches. The report uses current config and zero
+caps, so it intentionally surfaces growth the baseline has already accepted.
+Renames appear as removals plus additions.
 
 ## Invariants
 

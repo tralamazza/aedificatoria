@@ -100,8 +100,9 @@ complexity_delta = 5
 
 All keys, one-way-door overrides, test/API paths, excludes, and block flags:
 [`aed.toml.example`](aed.toml.example). Baseline growth caps default to `0`.
-Any effective config or baseline change requires an accepted ADR; `guard-config`
-enforces this.
+Policy config and baseline changes require an accepted ADR; `guard-config`
+enforces this. `cargo_advisory` is the one excluded toggle because it cannot
+affect the verdict.
 
 ### Baseline
 
