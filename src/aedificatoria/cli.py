@@ -70,6 +70,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="GitHub owner/repo or GitLab full project path (default: origin)",
     )
     hist.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
+    hist.add_argument(
+        "--jobs",
+        "-j",
+        type=int,
+        default=1,
+        help="Parallel workers for local history (default: 1; try CPU count)",
+    )
 
     adr = sub.add_parser("adr", help="Architecture decision records")
     adr_sub = adr.add_subparsers(dest="adr_cmd", required=True)
@@ -171,7 +178,12 @@ def cmd_history(args: argparse.Namespace) -> int:
         prepared = _history_gitlab(root, config, args)
     else:
         points = history_audit.evaluate(
-            root, config, limit=max(1, args.limit), since=args.since, head=args.head or "HEAD"
+            root,
+            config,
+            limit=max(1, args.limit),
+            since=args.since,
+            head=args.head or "HEAD",
+            jobs=max(1, args.jobs),
         )
         source = None
         header = "first-parent commits"

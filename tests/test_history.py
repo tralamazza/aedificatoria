@@ -47,6 +47,21 @@ def test_history_detects_new_cycle(repo: Path, commit, write):
     assert any("new package cycle" in item.message for item in points[-1].regressions)
 
 
+def test_history_parallel_matches_sequential(repo: Path, commit, write):
+    write(repo, "app.py", "value = 1\n")
+    commit(repo, "first")
+    write(repo, "app.py", "value = 2\n\ndef extra() -> None:\n    return None\n")
+    commit(repo, "second")
+    write(repo, "app.py", "value = 3\n\ndef extra() -> None:\n    return None\n")
+    commit(repo, "third")
+
+    sequential = history.evaluate(repo, Config(), limit=5, jobs=1)
+    parallel = history.evaluate(repo, Config(), limit=5, jobs=2)
+    assert [point.as_dict() for point in parallel] == [
+        point.as_dict() for point in sequential
+    ]
+
+
 def test_history_head_ref(repo: Path, commit, write):
     write(repo, "app.py", "value = 1\n")
     commit(repo, "first")

@@ -149,6 +149,7 @@ commits and ranks them by metric regressions:
 
 ```sh
 aed history --limit 30
+aed history --limit 100 --jobs 8
 aed history --since v1.0.0 --json
 ```
 
@@ -158,6 +159,13 @@ so the report surfaces per-function and total complexity growth, API removals an
 growth, new dependencies, new package edges, new cycles, removed tests, and
 assertion drops. It prints a timeline and a ranked "where it went bad" section;
 `--json` returns the same data. It is a report, not a gate: exit 0, no writes.
+
+Metric collection is independent per commit. `--jobs N` runs it in process
+workers with isolated worktrees and preserves order; the output is identical to
+`--jobs 1`. On `pallets/click`, a 100-commit window dropped from 27s to about 4–6s
+with 8 workers. The default is 1; keep `N` at or below CPU cores, and expect one
+parser tree per worker. Forge API modes (`--github-pr`, `--gitlab-mr`) do not use
+`--jobs`.
 
 The timeline also shows each commit's kind and churn. A single-parent commit whose
 subject ends in `(#N)` is treated as a squashed merge. If a single-parent commit
@@ -305,6 +313,8 @@ the change. Hidden tests should still live outside the agent's writable tree.
   commit, and do not re-evaluate historical ADRs or one-way doors. Squash merges
   are atomic: history detects PR-style squashes and flags oversized ones, but the
   intermediate commits are unrecoverable. Check the PR branch before squashing.
+- `--jobs` parallelizes local metric collection only; each worker holds a parser
+  tree and a temporary worktree. Forge API modes remain sequential.
 - The GitHub/GitLab API fallbacks are opt-in and non-hermetic: they need
   `gh`/`glab` authenticated, network, and host retention. The GitHub PR commit
   list is capped at 250. They never affect `aed check`.

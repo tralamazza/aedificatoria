@@ -8,6 +8,7 @@ current baseline has already accepted them.
 
 from __future__ import annotations
 
+from concurrent.futures import ProcessPoolExecutor
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -227,32 +228,58 @@ def _point(
     )
 
 
+def _collect_commit(repo: str, sha: str, config: Config) -> dict[str, Any]:
+    with base_worktree(Path(repo), sha) as tree:
+        return baseline.collect(tree, config)
+
+
+def _collect_metrics(
+    repo: Path,
+    commits: list[str],
+    config: Config,
+    jobs: int,
+) -> list[dict[str, Any]]:
+    if jobs <= 1 or len(commits) <= 1:
+        return [_collect_commit(str(repo), sha, config) for sha in commits]
+    workers = min(jobs, len(commits))
+    with ProcessPoolExecutor(max_workers=workers) as pool:
+        return list(
+            pool.map(
+                _collect_commit,
+                [str(repo)] * len(commits),
+                commits,
+                [config] * len(commits),
+            )
+        )
+
+
 def evaluate(
     repo: Path,
     config: Config,
     limit: int = 20,
     since: str | None = None,
     head: str = "HEAD",
+    jobs: int = 1,
 ) -> list[HistoryPoint]:
+    rows = history_commits(repo, limit, since, head)
+    metrics = _collect_metrics(repo, [row[0] for row in rows], config, jobs)
     points: list[HistoryPoint] = []
     previous: dict[str, Any] | None = None
-    for commit, date, subject in history_commits(repo, limit, since, head):
+    for (commit, date, subject), current in zip(rows, metrics):
         parents = commit_parents(repo, commit)
         base = parents[0] if parents else None
         files, lines = diff_stats(repo, base, commit)
-        with base_worktree(repo, commit) as tree:
-            metrics = baseline.collect(tree, config)
         regressions = (
             []
             if previous is None
-            else _regressions(previous, metrics, config, commit, subject)
+            else _regressions(previous, current, config, commit, subject)
         )
         kind, pr = _kind(parents, subject)
         regressions.extend(
             _atomic_finding(parents, kind, pr, files, lines, config, commit, subject)
         )
-        points.append(_point(commit, date, subject, parents, files, lines, metrics, regressions))
-        previous = metrics
+        points.append(_point(commit, date, subject, parents, files, lines, current, regressions))
+        previous = current
     return points
 
 

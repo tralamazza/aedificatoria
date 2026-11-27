@@ -327,6 +327,8 @@
     "src/aedificatoria/history.py": {
       "HistoryPoint.as_dict": 2,
       "_atomic_finding": 8,
+      "_collect_commit": 1,
+      "_collect_metrics": 4,
       "_count": 4,
       "_cycles": 7,
       "_delta": 2,
@@ -338,7 +340,7 @@
       "_summary": 3,
       "_test_counts": 6,
       "_total": 6,
-      "evaluate": 4,
+      "evaluate": 5,
       "evaluate_forge": 3,
       "json_payload": 4,
       "render_text": 13,
@@ -604,7 +606,8 @@
       "test_history_detects_new_cycle": 1,
       "test_history_detects_new_dependency": 1,
       "test_history_head_ref": 1,
-      "test_history_marks_squash_and_flags_oversized_atomic": 7
+      "test_history_marks_squash_and_flags_oversized_atomic": 7,
+      "test_history_parallel_matches_sequential": 1
     },
     "tests/test_jsts.py": {
       "test_ambient_declarations_are_api": 5,
