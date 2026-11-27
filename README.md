@@ -40,6 +40,37 @@ trees. Exit code `2` means block; `0` means allow or review.
 | `change-amplification` | The diff grows past the file/line budget; an ADR downgrades it to a warning. |
 | `adr-quality` | An ADR is deleted, lacks a title/status, or lacks a `## Decision`. |
 
+## Languages
+
+| Language | Parser | Public API | Tests | Dependencies |
+|---|---|---|---|---|
+| Python (`.py`) | `ast` | top-level functions, classes, `__all__` | `test_*` functions, asserts, skip/xfail | absolute imports |
+| Rust (`.rs`) | built-in lexer + brace matcher | `pub` fn/struct/enum/trait/type/const/static, impl and trait methods | `#[test]`/`#[tokio::test]`, inline `#[cfg(test)]` modules, `assert!` macros, `#[ignore]` | `use` roots and Cargo dependency tables |
+
+Adapters live in `languages.py`; each one exposes parsing, public API,
+complexity, test information, package edges, imports, and local packages.
+Checks dispatch by file extension, so adding a language means adding an
+adapter module and one registry entry, not editing the rules.
+
+Rust analysis is item-level and lexical by design: no toolchain, no network, no
+parser dependency. Struct fields and enum variants are not compared, macros are
+not expanded, and crate-level edges are coarser than module-level edges.
+
+### Optional cargo advisory
+
+When `cargo` is installed and the repository has a root `Cargo.toml`, `aed check`
+also runs `cargo metadata --no-deps --offline` against the base and head trees.
+It adds `cargo-advisory` findings with severity `info`:
+
+- crate cycles declared in manifests but absent from the base;
+- new declared dependencies the manifest scan missed, or scanner-only
+  dependencies cargo does not attach to a package.
+
+Advisory findings never change the verdict, so a machine without cargo produces
+the same exit code and the same blocking findings. The command runs offline,
+resolves no dependencies, and writes no lockfile or target directory. Disable it
+with `cargo_advisory = false`.
+
 ## Configuration
 
 `aed init` writes `aed.toml`:
@@ -50,6 +81,7 @@ base = "HEAD"
 adr_dir = "docs/decisions"
 source_roots = ["src", "."]
 allow_new_dependencies = []
+cargo_advisory = true
 require_adr_for_large_change = true
 block_removed_tests = true
 block_removed_asserts = true
@@ -108,12 +140,13 @@ change. Hidden tests should still live outside the agent's writable tree.
 
 ## Limitations
 
-- Python-only in this version. The parser and complexity metric are Python AST
-  based; TypeScript/JavaScript adapters are the next step.
+- Python and Rust are supported. The Python parser is `ast`; the Rust analyzer
+  is a built-in lexer, so Rust results are item-level rather than full syntax
+  trees. TypeScript/JavaScript adapters are the next step.
 - Complexity is a heuristic (branch count), not a full cognitive-complexity
   model.
-- The dependency graph is package-level; module-level cycles inside one
-  top-level package are not reported.
+- The dependency graph is package-level (Python top-level packages, Rust
+  crates); module-level cycles inside one package or crate are not reported.
 - `aed check` compares the working tree to a base commit, not the staged index.
   A staged-only mode is planned.
 - The guard is deterministic. It does not judge whether an ADR is *good*, only

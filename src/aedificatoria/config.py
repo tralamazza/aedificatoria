@@ -21,6 +21,7 @@ _DEFAULT_EXCLUDES = (
     ".ruff_cache/**",
     "dist/**",
     "build/**",
+    "target/**",
     "**/*.egg-info/**",
 )
 
@@ -41,8 +42,11 @@ _DEFAULT_ONE_WAY_DOORS = (
 
 _DEFAULT_TEST_PATHS = (
     "tests/**",
+    "**/tests/**",
     "**/test_*.py",
     "**/*_test.py",
+    "**/*_test.rs",
+    "**/*_tests.rs",
 )
 
 _DEFAULT_TEST_CONFIG_PATHS = (
@@ -71,13 +75,14 @@ class Config:
     one_way_doors: tuple[str, ...] = _DEFAULT_ONE_WAY_DOORS
     test_paths: tuple[str, ...] = _DEFAULT_TEST_PATHS
     test_config_paths: tuple[str, ...] = _DEFAULT_TEST_CONFIG_PATHS
-    api_paths: tuple[str, ...] = ("**/*.py",)
+    api_paths: tuple[str, ...] = ("**/*.py", "**/*.rs")
     allow_new_dependencies: tuple[str, ...] = ()
     forbidden_edges: tuple[ForbiddenEdge, ...] = ()
     max_changed_files: int = 25
     max_changed_lines: int = 800
     max_complexity: int = 15
     complexity_delta: int = 5
+    cargo_advisory: bool = True
     require_adr_for_large_change: bool = True
     block_removed_tests: bool = True
     block_removed_asserts: bool = True
@@ -227,13 +232,14 @@ def load_config(repo: Path, path: str | Path | None = None) -> Config:
         one_way_doors=_as_tuple(aed.get("one_way_doors"), _DEFAULT_ONE_WAY_DOORS),
         test_paths=_as_tuple(aed.get("test_paths"), _DEFAULT_TEST_PATHS),
         test_config_paths=_as_tuple(aed.get("test_config_paths"), _DEFAULT_TEST_CONFIG_PATHS),
-        api_paths=_as_tuple(aed.get("api_paths"), ("**/*.py",)),
+        api_paths=_as_tuple(aed.get("api_paths"), ("**/*.py", "**/*.rs")),
         allow_new_dependencies=_as_tuple(aed.get("allow_new_dependencies"), ()),
         forbidden_edges=tuple(edges),
         max_changed_files=_as_int(thresholds.get("max_changed_files", aed.get("max_changed_files")), 25),
         max_changed_lines=_as_int(thresholds.get("max_changed_lines", aed.get("max_changed_lines")), 800),
         max_complexity=_as_int(thresholds.get("max_complexity", aed.get("max_complexity")), 15),
         complexity_delta=_as_int(thresholds.get("complexity_delta", aed.get("complexity_delta")), 5),
+        cargo_advisory=_as_bool(aed.get("cargo_advisory"), True),
         require_adr_for_large_change=_as_bool(aed.get("require_adr_for_large_change"), True),
         block_removed_tests=_as_bool(aed.get("block_removed_tests"), True),
         block_removed_asserts=_as_bool(aed.get("block_removed_asserts"), True),

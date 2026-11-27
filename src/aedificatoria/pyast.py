@@ -4,11 +4,19 @@ from __future__ import annotations
 
 import ast
 import re
-from dataclasses import dataclass
+import sys
 from pathlib import Path
 
 from .config import Config
 from .git import tracked_python_files
+from .model import ImportRef, TestInfo
+
+NAME = "python"
+EXTENSIONS = (".py",)
+
+
+def is_stdlib(module: str) -> bool:
+    return module in sys.stdlib_module_names
 
 
 def parse_text(text: str | None) -> ast.Module | None:
@@ -18,13 +26,6 @@ def parse_text(text: str | None) -> ast.Module | None:
         return ast.parse(text)
     except SyntaxError:
         return None
-
-
-@dataclass(frozen=True)
-class ImportRef:
-    module: str
-    level: int
-    line: int
 
 
 def imports(tree: ast.Module) -> list[ImportRef]:
@@ -90,6 +91,36 @@ def declared_all(tree: ast.Module) -> set[str] | None:
     return None
 
 
+_PUBLIC_METHODS = {"__init__", "__call__", "__enter__", "__exit__"}
+
+
+def _function_surface(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str | None:
+    if node.name.startswith("_"):
+        return None
+    return _func_signature(node)
+
+
+def _class_entries(node: ast.ClassDef) -> dict[str, str]:
+    if node.name.startswith("_"):
+        return {}
+    entries = {node.name: _class_signature(node)}
+    for item in node.body:
+        if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and (
+            not item.name.startswith("_") or item.name in _PUBLIC_METHODS
+        ):
+            entries[f"{node.name}.{item.name}"] = _func_signature(item)
+    return entries
+
+
+def _assignment_entries(targets: list[ast.expr]) -> dict[str, str]:
+    entries: dict[str, str] = {}
+    for target in targets:
+        for name in _target_names(target):
+            if not name.startswith("_") and name != "__all__":
+                entries[name] = "const"
+    return entries
+
+
 def public_api(tree: ast.Module) -> dict[str, str]:
     """Return public symbols -> normalized signature/kind."""
     surface: dict[str, str] = {}
@@ -100,25 +131,15 @@ def public_api(tree: ast.Module) -> dict[str, str]:
 
     for node in tree.body:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            if not node.name.startswith("_"):
-                surface[node.name] = _func_signature(node)
+            signature = _function_surface(node)
+            if signature is not None:
+                surface[node.name] = signature
         elif isinstance(node, ast.ClassDef):
-            if node.name.startswith("_"):
-                continue
-            surface[node.name] = _class_signature(node)
-            for item in node.body:
-                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    if not item.name.startswith("_") or item.name in {"__init__", "__call__", "__enter__", "__exit__"}:
-                        surface[f"{node.name}.{item.name}"] = _func_signature(item)
+            surface.update(_class_entries(node))
         elif isinstance(node, ast.Assign):
-            for target in node.targets:
-                for name in _target_names(target):
-                    if not name.startswith("_") and name != "__all__":
-                        surface[name] = "const"
+            surface.update(_assignment_entries(node.targets))
         elif isinstance(node, ast.AnnAssign):
-            for name in _target_names(node.target):
-                if not name.startswith("_") and name != "__all__":
-                    surface[name] = "const"
+            surface.update(_assignment_entries([node.target]))
     return surface
 
 
@@ -221,52 +242,72 @@ def _call_name(node: ast.expr) -> str:
     return ".".join(reversed(parts))
 
 
-@dataclass(frozen=True)
-class TestInfo:
-    functions: frozenset[str]
-    assertions: int
-    skips: frozenset[str]
+def _call_assertion(node: ast.Call) -> bool:
+    name = _call_name(node.func)
+    last = name.rsplit(".", 1)[-1] if name else ""
+    return last.startswith("assert") or last in {"raises", "fail"}
 
 
-def test_info(tree: ast.Module) -> TestInfo:
-    functions: set[str] = set()
-    skips: set[str] = set()
+def _call_skip(node: ast.Call) -> bool:
+    name = _call_name(node.func)
+    last = name.rsplit(".", 1)[-1] if name else ""
+    return name in {"pytest.skip", "pytest.xfail", "unittest.skip"} or last == "skipTest"
+
+
+def _walk_assertions(tree: ast.Module, skips: set[str]) -> int:
     assertions = 0
-
     for node in ast.walk(tree):
         if isinstance(node, ast.Assert):
             assertions += 1
         elif isinstance(node, ast.Call):
-            name = _call_name(node.func)
-            last = name.rsplit(".", 1)[-1] if name else ""
-            if last.startswith("assert") or last in {"raises", "fail"}:
+            if _call_assertion(node):
                 assertions += 1
-            if name in {"pytest.skip", "pytest.xfail", "unittest.skip"} or last == "skipTest":
+            if _call_skip(node):
+                skips.add("<module>")
+    return assertions
+
+
+def _collect_tests(
+    body: list[ast.stmt], prefix: str, functions: set[str], skips: set[str]
+) -> None:
+    for node in body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name.startswith("test_"):
+            name = f"{prefix}{node.name}"
+            functions.add(name)
+            if _has_skip(node.decorator_list):
+                skips.add(name)
+        elif isinstance(node, ast.ClassDef):
+            class_name = f"{prefix}{node.name}"
+            if _has_skip(node.decorator_list):
+                skips.add(class_name)
+            _collect_tests(node.body, class_name + ".", functions, skips)
+
+
+def _module_marker_skips(tree: ast.Module, skips: set[str]) -> None:
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        for target in node.targets:
+            if not (isinstance(target, ast.Name) and target.id == "pytestmark"):
+                continue
+            marker = ast.unparse(node.value).lower()
+            if "skip" in marker or "xfail" in marker:
                 skips.add("<module>")
 
-    def collect(body: list[ast.stmt], prefix: str = "") -> None:
-        for node in body:
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name.startswith("test_"):
-                name = f"{prefix}{node.name}"
-                functions.add(name)
-                if _has_skip(node.decorator_list):
-                    skips.add(name)
-            elif isinstance(node, ast.ClassDef):
-                class_name = f"{prefix}{node.name}"
-                if _has_skip(node.decorator_list):
-                    skips.add(class_name)
-                collect(node.body, class_name + ".")
 
-    collect(tree.body)
-
-    for node in tree.body:
-        if isinstance(node, ast.Assign):
-            for target in node.targets:
-                if isinstance(target, ast.Name) and target.id == "pytestmark":
-                    if "skip" in ast.unparse(node.value).lower() or "xfail" in ast.unparse(node.value).lower():
-                        skips.add("<module>")
-
+def test_info(tree: ast.Module | None) -> TestInfo:
+    if tree is None:
+        return TestInfo(frozenset(), 0, frozenset())
+    functions: set[str] = set()
+    skips: set[str] = set()
+    assertions = _walk_assertions(tree, skips)
+    _collect_tests(tree.body, "", functions, skips)
+    _module_marker_skips(tree, skips)
     return TestInfo(frozenset(functions), assertions, frozenset(skips))
+
+
+def declared_dependencies(_root: Path, _config: Config) -> dict[str, tuple[str, int]]:
+    return {}
 
 
 def local_packages(root: Path, config: Config) -> set[str]:

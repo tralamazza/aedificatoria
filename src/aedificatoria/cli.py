@@ -8,6 +8,8 @@ import sys
 from pathlib import Path
 
 from . import __version__
+from . import cargo as cargo_tools
+from . import languages as language_adapters
 from .adr import create_adr, init_project
 from .checks import run_checks
 from .config import load_config
@@ -102,6 +104,9 @@ def cmd_rules(args: argparse.Namespace) -> int:
     print(f"base: {config.base}")
     print(f"adr_dir: {config.adr_dir}")
     print(f"source_roots: {', '.join(config.source_roots)}")
+    print(f"languages: {', '.join(language_adapters.names())}")
+    cargo_state = "available" if cargo_tools.available() else "unavailable"
+    print(f"cargo_advisory: {str(config.cargo_advisory).lower()} (cargo {cargo_state}; info only)")
     print(
         "thresholds: "
         f"max_changed_files={config.max_changed_files}, "

@@ -38,6 +38,20 @@ class Finding:
 
 
 @dataclass(frozen=True)
+class ImportRef:
+    module: str
+    level: int
+    line: int
+
+
+@dataclass(frozen=True)
+class TestInfo:
+    functions: frozenset[str]
+    assertions: int
+    skips: frozenset[str]
+
+
+@dataclass(frozen=True)
 class ChangedFile:
     status: str
     path: str

@@ -167,6 +167,7 @@ _SKIP_DIRS = {
     ".ruff_cache",
     "dist",
     "build",
+    "target",
 }
 
 

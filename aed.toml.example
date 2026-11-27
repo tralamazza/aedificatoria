@@ -16,9 +16,13 @@ source_roots = ["src", "."]
 #   "**/openapi*.yaml", "**/openapi*.json",
 # ]
 
-# test_paths = ["tests/**", "**/test_*.py", "**/*_test.py"]
-# api_paths = ["**/*.py"]
+# test_paths = [
+#   "tests/**", "**/tests/**", "**/test_*.py", "**/*_test.py",
+#   "**/*_test.rs", "**/*_tests.rs",
+# ]
+# api_paths = ["**/*.py", "**/*.rs"]
 # allow_new_dependencies = []
+cargo_advisory = true
 require_adr_for_large_change = true
 block_removed_tests = true
 block_removed_asserts = true
