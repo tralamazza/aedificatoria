@@ -31,6 +31,7 @@ source_roots = ["src", "."]
 # ]
 # api_paths = ["**/*.py", "**/*.rs", "**/*.js", "**/*.jsx", "**/*.ts", "**/*.tsx", "**/*.mjs", "**/*.cjs", "**/*.mts", "**/*.cts"]
 # allow_new_dependencies = []
+baseline_path = "aed-baseline.json"
 cargo_advisory = true
 require_adr_for_large_change = true
 block_removed_tests = true
@@ -43,6 +44,10 @@ max_changed_files = 25
 max_changed_lines = 800
 max_complexity = 15
 complexity_delta = 5
+max_baseline_complexity_growth = 0
+max_baseline_api_growth = 0
+max_baseline_dependency_growth = 0
+max_baseline_edge_growth = 0
 
 # [[aed.forbidden_edges]]
 # from = "api"

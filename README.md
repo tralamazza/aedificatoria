@@ -18,6 +18,7 @@ uv venv .venv
 uv pip install -e '.[dev]'
 
 .venv/bin/aed init
+.venv/bin/aed baseline
 .venv/bin/aed check
 .venv/bin/aed check --json
 ```
@@ -32,7 +33,8 @@ trees. Exit code `2` means block; `0` means allow or review.
 |---|---|
 | `one-way-door` | Changes under migrations, schema, API, auth, `.proto`, OpenAPI require an ADR with a title, status, and `## Decision`. |
 | `test-tampering` | Deleted tests, per-test or total assertion drops, new `skip`/`xfail`/`.only`, or deleted test configuration. |
-| `guard-config` | An effective `aed.toml` change (thresholds, allowlists, excludes, paths, doors) without an ADR. |
+| `guard-config` | An effective `aed.toml` change (thresholds, allowlists, excludes, paths, doors, baseline) without an ADR. |
+| `baseline` | Growth beyond the committed metric baseline: per-function/total complexity, public API, dependencies, package edges, removed tests, assertion drops. |
 | `import-cycle` | New top-level package cycles. |
 | `forbidden-edge` | New dependency edges listed in `[[aed.forbidden_edges]]`. |
 | `complexity` | A function crosses the complexity limit, or increases by more than the ratchet delta. |
@@ -84,6 +86,7 @@ base = "HEAD"
 adr_dir = "docs/decisions"
 source_roots = ["src", "."]
 allow_new_dependencies = []
+baseline_path = "aed-baseline.json"
 cargo_advisory = true
 require_adr_for_large_change = true
 block_removed_tests = true
@@ -96,6 +99,10 @@ max_changed_files = 25
 max_changed_lines = 800
 max_complexity = 15
 complexity_delta = 5
+max_baseline_complexity_growth = 0
+max_baseline_api_growth = 0
+max_baseline_dependency_growth = 0
+max_baseline_edge_growth = 0
 
 # [[aed.forbidden_edges]]
 # from = "api"
@@ -108,6 +115,32 @@ One-way-door paths, test paths, API paths, and excludes are configurable; see
 control plane: any effective change to `aed.toml` requires an ADR in the same
 diff, so a one-line threshold, allowlist, exclude, or door change cannot silently
 disable a check.
+
+### Persistent baseline
+
+`aed baseline` writes a deterministic snapshot of per-file/function complexity,
+public API symbols, external dependencies, package edges, and per-test assertion
+counts to `aed-baseline.json`. `aed check` compares the working tree against that
+snapshot, not only against the immediate base. Small increments therefore
+accumulate against the baseline instead of resetting every commit.
+
+The four growth caps default to `0`: no net complexity, API, dependency, or edge
+growth without a deliberate refresh. Set positive caps for planned expansion.
+Removing a baseline public symbol or test, or dropping a test's assertion count,
+is always an error.
+
+Refreshing the baseline is itself a verifier change: `guard-config` requires an
+ADR for any change to the baseline file. The workflow is:
+
+```sh
+aed baseline
+# add or update an ADR explaining the accepted growth
+aed check
+```
+
+A missing baseline is an `info` finding so adoption never blocks; a malformed
+baseline is an error. Keys are file paths plus symbol/function names, so a rename
+looks like a removal plus an addition and needs a refresh.
 
 ## Agent integration
 
@@ -165,10 +198,13 @@ the change. Hidden tests should still live outside the agent's writable tree.
   crates); module-level cycles inside one package or crate are not reported.
 - `aed check` compares the working tree to a base commit, not the staged index.
   A staged-only mode is planned.
+- The baseline keys metrics by file plus symbol/function name. Renames look like
+  removals plus additions and need a baseline refresh; cumulative file/line churn
+  is still judged per diff.
 - The guard is per-diff. An ADR-authorized configuration weakening still exits 0,
   replacing an assertion with a weaker one while keeping the count is semantic
-  and not detected, and cumulative drift across many small commits is not
-  budgeted.
+  and not detected, and cumulative drift across many small commits is handled
+  only for the baseline metrics listed above.
 - The guard is deterministic. It does not judge whether an ADR is *good*, only
   whether a decision was recorded and the mechanical constraints hold.
 

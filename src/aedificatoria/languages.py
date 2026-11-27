@@ -82,6 +82,10 @@ def names() -> list[str]:
     return [adapter.name for adapter in ADAPTERS]
 
 
+def extensions() -> tuple[str, ...]:
+    return tuple(extension for adapter in ADAPTERS for extension in adapter.extensions)
+
+
 def same_language(first: str, second: str) -> bool:
     left = get(first)
     right = get(second)

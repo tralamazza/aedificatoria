@@ -5,8 +5,9 @@ from __future__ import annotations
 import re
 from collections import Counter
 from dataclasses import asdict
+from pathlib import Path
 
-from . import cargo, languages
+from . import baseline, cargo, languages
 from .config import Config, load_config
 from .model import SEVERITY_RANK, ChangedFile, Context, Finding, TestInfo
 from .pyast import cycle_evidence, strongly_connected
@@ -267,6 +268,10 @@ def check_guard_config(ctx: Context) -> list[Finding]:
     base_policy = _config_policy(load_config(ctx.base_dir, ctx.config_path))
     head_policy = _config_policy(load_config(ctx.repo, ctx.config_path))
     changed = sorted(name for name in base_policy if base_policy[name] != head_policy.get(name))
+    baseline_path = str(head_policy.get("baseline_path", ""))
+    if baseline_path and not Path(baseline_path).is_absolute():
+        if ctx.base_text(baseline_path) != ctx.head_text(baseline_path):
+            changed.append(f"baseline:{baseline_path}")
     if not changed:
         return []
 
@@ -297,6 +302,32 @@ def check_guard_config(ctx: Context) -> list[Finding]:
             evidence=evidence,
         )
     ]
+
+
+def check_baseline(ctx: Context) -> list[Finding]:
+    if not ctx.config.baseline_path:
+        return []
+    try:
+        previous = baseline.load(ctx.repo, ctx.config.baseline_path)
+    except baseline.BaselineError as exc:
+        return [
+            Finding(
+                "baseline",
+                "error",
+                f"baseline unreadable: {exc}",
+                path=ctx.config.baseline_path,
+            )
+        ]
+    if previous is None:
+        return [
+            Finding(
+                "baseline",
+                "info",
+                "no baseline found; run `aed baseline` to start the persistent ratchet",
+                path=ctx.config.baseline_path,
+            )
+        ]
+    return baseline.compare(previous, baseline.collect(ctx.repo, ctx.config), ctx.config)
 
 
 def check_test_tampering(ctx: Context) -> list[Finding]:
@@ -610,6 +641,7 @@ def run_checks(ctx: Context) -> list[Finding]:
     for check in (
         check_change_amplification,
         check_guard_config,
+        check_baseline,
         check_one_way_doors,
         check_test_tampering,
         check_import_graph,

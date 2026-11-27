@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 from . import __version__
+from . import baseline as baseline_store
 from . import cargo as cargo_tools
 from . import languages as language_adapters
 from .adr import create_adr, init_project
@@ -38,6 +39,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     init = sub.add_parser("init", help="Create aed.toml and the first ADR")
     _add_path(init)
+
+    baseline_cmd = sub.add_parser("baseline", help="Write the persistent metric baseline")
+    _add_path(baseline_cmd)
 
     adr = sub.add_parser("adr", help="Architecture decision records")
     adr_sub = adr.add_subparsers(dest="adr_cmd", required=True)
@@ -81,6 +85,18 @@ def cmd_check(args: argparse.Namespace) -> int:
     return exit_code(findings)
 
 
+def cmd_baseline(args: argparse.Namespace) -> int:
+    root = repo_root(Path(args.path))
+    config = load_config(root)
+    if not config.baseline_path:
+        print("aed: baseline_path is empty; baseline is disabled", file=sys.stderr)
+        return 2
+    data = baseline_store.collect(root, config)
+    path = baseline_store.write(root, config.baseline_path, data)
+    print(path.relative_to(root) if path.is_relative_to(root) else path)
+    return 0
+
+
 def cmd_init(args: argparse.Namespace) -> int:
     root = Path(args.path).resolve()
     created, existing = init_project(root)
@@ -88,7 +104,7 @@ def cmd_init(args: argparse.Namespace) -> int:
         print(f"created  {path.relative_to(root)}")
     for path in existing:
         print(f"exists   {path.relative_to(root)}")
-    print("next: aed check")
+    print("next: aed baseline; aed check")
     return 0
 
 
@@ -109,6 +125,14 @@ def cmd_rules(args: argparse.Namespace) -> int:
     print(f"languages: {', '.join(language_adapters.names())}")
     cargo_state = "available" if cargo_tools.available() else "unavailable"
     print(f"cargo_advisory: {str(config.cargo_advisory).lower()} (cargo {cargo_state}; info only)")
+    print(f"baseline: {config.baseline_path or '(disabled)'}")
+    print(
+        "baseline caps: "
+        f"complexity +{config.max_baseline_complexity_growth}, "
+        f"api +{config.max_baseline_api_growth}, "
+        f"deps +{config.max_baseline_dependency_growth}, "
+        f"edges +{config.max_baseline_edge_growth}"
+    )
     print(
         "thresholds: "
         f"max_changed_files={config.max_changed_files}, "
@@ -135,6 +159,8 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_check(args)
         if args.cmd == "init":
             return cmd_init(args)
+        if args.cmd == "baseline":
+            return cmd_baseline(args)
         if args.cmd == "adr" and args.adr_cmd == "new":
             return cmd_adr_new(args)
         if args.cmd == "rules":

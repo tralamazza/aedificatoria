@@ -110,10 +110,15 @@ class Config:
     api_paths: tuple[str, ...] = _DEFAULT_API_PATHS
     allow_new_dependencies: tuple[str, ...] = ()
     forbidden_edges: tuple[ForbiddenEdge, ...] = ()
+    baseline_path: str = "aed-baseline.json"
     max_changed_files: int = 25
     max_changed_lines: int = 800
     max_complexity: int = 15
     complexity_delta: int = 5
+    max_baseline_complexity_growth: int = 0
+    max_baseline_api_growth: int = 0
+    max_baseline_dependency_growth: int = 0
+    max_baseline_edge_growth: int = 0
     cargo_advisory: bool = True
     require_adr_for_large_change: bool = True
     block_removed_tests: bool = True
@@ -267,10 +272,23 @@ def load_config(repo: Path, path: str | Path | None = None) -> Config:
         api_paths=_as_tuple(aed.get("api_paths"), _DEFAULT_API_PATHS),
         allow_new_dependencies=_as_tuple(aed.get("allow_new_dependencies"), ()),
         forbidden_edges=tuple(edges),
+        baseline_path=str(aed.get("baseline_path", "aed-baseline.json")),
         max_changed_files=_as_int(thresholds.get("max_changed_files", aed.get("max_changed_files")), 25),
         max_changed_lines=_as_int(thresholds.get("max_changed_lines", aed.get("max_changed_lines")), 800),
         max_complexity=_as_int(thresholds.get("max_complexity", aed.get("max_complexity")), 15),
         complexity_delta=_as_int(thresholds.get("complexity_delta", aed.get("complexity_delta")), 5),
+        max_baseline_complexity_growth=_as_int(
+            thresholds.get("max_baseline_complexity_growth", aed.get("max_baseline_complexity_growth")), 0
+        ),
+        max_baseline_api_growth=_as_int(
+            thresholds.get("max_baseline_api_growth", aed.get("max_baseline_api_growth")), 0
+        ),
+        max_baseline_dependency_growth=_as_int(
+            thresholds.get("max_baseline_dependency_growth", aed.get("max_baseline_dependency_growth")), 0
+        ),
+        max_baseline_edge_growth=_as_int(
+            thresholds.get("max_baseline_edge_growth", aed.get("max_baseline_edge_growth")), 0
+        ),
         cargo_advisory=_as_bool(aed.get("cargo_advisory"), True),
         require_adr_for_large_change=_as_bool(aed.get("require_adr_for_large_change"), True),
         block_removed_tests=_as_bool(aed.get("block_removed_tests"), True),

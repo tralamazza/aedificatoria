@@ -191,13 +191,13 @@ _SKIP_DIRS = {
 }
 
 
-def tracked_python_files(root: Path, config: Config) -> list[str]:
-    """List repository-relative `.py` files, excluding generated/vendor trees."""
+def tracked_source_files(root: Path, config: Config, extensions: tuple[str, ...]) -> list[str]:
+    """List repository-relative source files with the given extensions."""
     out: list[str] = []
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = [name for name in dirnames if name not in _SKIP_DIRS]
         for name in filenames:
-            if not name.endswith(".py"):
+            if not name.endswith(extensions):
                 continue
             full = Path(dirpath) / name
             try:
@@ -209,3 +209,8 @@ def tracked_python_files(root: Path, config: Config) -> list[str]:
             out.append(rel)
     out.sort()
     return out
+
+
+def tracked_python_files(root: Path, config: Config) -> list[str]:
+    """List repository-relative `.py` files, excluding generated/vendor trees."""
+    return tracked_source_files(root, config, (".py",))
