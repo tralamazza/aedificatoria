@@ -47,6 +47,8 @@ block_removed_tests = true
 block_removed_asserts = true
 block_new_skips = true
 block_breaking_api = true
+# Exit 1 for a review verdict (warnings). Default: false (review exits 0).
+fail_on_warn = false
 
 [thresholds]
 max_changed_files = 25

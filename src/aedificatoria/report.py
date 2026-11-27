@@ -22,8 +22,13 @@ def verdict(findings: list[Finding]) -> str:
     return "allow"
 
 
-def exit_code(findings: list[Finding]) -> int:
-    return 2 if verdict(findings) == "block" else 0
+def exit_code(findings: list[Finding], *, strict: bool = False) -> int:
+    result = verdict(findings)
+    if result == "block":
+        return 2
+    if result == "review" and strict:
+        return 1
+    return 0
 
 
 def counts(findings: list[Finding]) -> dict[str, int]:

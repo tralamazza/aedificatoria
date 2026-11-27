@@ -74,6 +74,7 @@ read-only, and makes no network calls.
 |---:|---|---|
 | `0` | `allow` | No findings. |
 | `0` | `review` | Warnings only; read before merge. |
+| `1` | `review` + strict | Warnings fail under `--strict` or `fail_on_warn = true`. |
 | `2` | `block` | Error(s); do not commit/merge. |
 
 `2` also covers CLI, config, and git errors.
@@ -82,7 +83,7 @@ read-only, and makes no network calls.
 
 | Command | Purpose |
 |---|---|
-| `aed check [--base REV] [--config PATH] [--staged] [--json]` | Check working tree or staged index against a base. |
+| `aed check [--base REV] [--config PATH] [--staged] [--json] [--strict]` | Check working tree or staged index against a base. |
 | `aed doctor [--json]` | Check required and optional installed tools. |
 | `aed baseline` | Write the persistent metric baseline. |
 | `aed history [--limit N] [--all] [--jobs N]` | Audit local history. |
@@ -158,6 +159,7 @@ adr_dir = "docs/decisions"
 source_roots = ["src", "."]
 metric_excludes = ["docs/**", "examples/**", "benchmarks/**"]
 baseline_path = "aed-baseline.json"
+fail_on_warn = false
 
 [thresholds]
 max_changed_files = 25
@@ -267,8 +269,9 @@ Harness policy:
   `git merge-base HEAD origin/main`; the repository workflow does this and the
   HEAD~1 fallback already: [`.github/workflows/aed.yml`](.github/workflows/aed.yml).
 - CI uses working-tree mode. `--staged` is for pre-commit.
-- `review` exits `0`; to fail warnings too:
-  `jq -e '.verdict == "allow"' aed.json >/dev/null`.
+- `review` exits `0` by default. Set `fail_on_warn = true` in `[aed]` or pass
+  `aed check --strict` to exit `1` for warnings; errors still exit `2`.
+  As an output-only alternative: `jq -e '.verdict == "allow"' aed.json >/dev/null`.
 - Upload `aed.json` as an artifact even on failure.
 
 ### Pre-commit and trust boundary

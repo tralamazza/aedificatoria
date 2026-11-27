@@ -199,3 +199,23 @@ def test_cli_subdir_commands_use_repository_root(repo: Path, write, capsys):
     output = capsys.readouterr().out
     assert "exclude:" in output
     assert "block flags:" in output
+
+
+def test_cli_strict_warning_exit_codes(repo: Path, commit, write, capsys):
+    write(repo, "pyproject.toml", "[tool.pytest.ini_options]\naddopts = \"-q\"\n")
+    commit(repo)
+    write(repo, "pyproject.toml", "[tool.pytest.ini_options]\naddopts = \"\"\n")
+
+    assert main(["check", "--path", str(repo)]) == 0
+    capsys.readouterr()
+    assert main(["check", "--path", str(repo), "--strict"]) == 1
+
+
+def test_cli_fail_on_warn_config(repo: Path, commit, write, capsys):
+    write(repo, "aed.toml", "[aed]\nfail_on_warn = true\n")
+    write(repo, "pyproject.toml", "[tool.pytest.ini_options]\naddopts = \"-q\"\n")
+    commit(repo)
+    write(repo, "pyproject.toml", "[tool.pytest.ini_options]\naddopts = \"\"\n")
+
+    assert main(["check", "--path", str(repo)]) == 1
+    assert "test-config" in capsys.readouterr().out

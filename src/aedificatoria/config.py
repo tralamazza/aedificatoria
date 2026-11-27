@@ -151,6 +151,7 @@ class Config:
     block_removed_asserts: bool = True
     block_new_skips: bool = True
     block_breaking_api: bool = True
+    fail_on_warn: bool = False
 
     def is_excluded(self, path: str) -> bool:
         return matches(path, self.exclude)
@@ -400,4 +401,5 @@ def load_config(repo: Path, path: str | Path | None = None) -> Config:
         block_removed_asserts=_as_bool(aed.get("block_removed_asserts"), True),
         block_new_skips=_as_bool(aed.get("block_new_skips"), True),
         block_breaking_api=_as_bool(aed.get("block_breaking_api"), True),
+        fail_on_warn=_as_bool(aed.get("fail_on_warn"), False),
     )

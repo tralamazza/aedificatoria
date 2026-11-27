@@ -47,6 +47,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Check the staged index instead of the working tree",
     )
     check.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
+    check.add_argument(
+        "--strict",
+        action="store_true",
+        help="Exit 1 when the verdict is review (warnings)",
+    )
 
     init = sub.add_parser("init", help="Create aed.toml and the first ADR")
     _add_path(init)
@@ -163,7 +168,7 @@ def cmd_check(args: argparse.Namespace) -> int:
         print(json.dumps(json_payload(findings, commit, changed), indent=2))
     else:
         print(render_text(findings, commit, changed))
-    return exit_code(findings)
+    return exit_code(findings, strict=args.strict or config.fail_on_warn)
 
 
 def cmd_baseline(args: argparse.Namespace) -> int:
@@ -321,7 +326,8 @@ def cmd_rules(args: argparse.Namespace) -> int:
         f"removed_asserts={str(config.block_removed_asserts).lower()}, "
         f"new_skips={str(config.block_new_skips).lower()}, "
         f"breaking_api={str(config.block_breaking_api).lower()}, "
-        f"adr_for_large_change={str(config.require_adr_for_large_change).lower()}"
+        f"adr_for_large_change={str(config.require_adr_for_large_change).lower()}, "
+        f"fail_on_warn={str(config.fail_on_warn).lower()}"
     )
     print("one_way_doors:")
     for pattern in config.one_way_doors:
