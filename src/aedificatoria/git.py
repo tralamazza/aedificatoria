@@ -57,6 +57,16 @@ def resolve_commit(repo: Path, ref: str) -> str:
     return os.fsdecode(proc.stdout).strip()
 
 
+def commit_exists(repo: Path, ref: str) -> bool:
+    proc = _git(repo, "cat-file", "-e", f"{ref}^{{commit}}", check=False)
+    return proc.returncode == 0
+
+
+def remote_url(repo: Path, name: str = "origin") -> str:
+    proc = _git(repo, "remote", "get-url", name, check=False)
+    return os.fsdecode(proc.stdout).strip() if proc.returncode == 0 else ""
+
+
 def history_commits(
     repo: Path,
     limit: int,

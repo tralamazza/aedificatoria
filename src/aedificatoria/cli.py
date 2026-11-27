@@ -10,6 +10,7 @@ from pathlib import Path
 from . import __version__
 from . import baseline as baseline_store
 from . import cargo as cargo_tools
+from . import github as github_audit
 from . import history as history_audit
 from . import languages as language_adapters
 from .adr import create_adr, init_project
@@ -48,7 +49,14 @@ def build_parser() -> argparse.ArgumentParser:
     _add_path(hist)
     hist.add_argument("--limit", type=int, default=20, help="First-parent commits to inspect (default: 20)")
     hist.add_argument("--since", default=None, help="Only commits after this revision")
-    hist.add_argument("--head", default="HEAD", help="Tip revision to inspect (default: HEAD)")
+    hist.add_argument("--head", default=None, help="Tip revision to inspect (default: HEAD)")
+    hist.add_argument(
+        "--github-pr",
+        type=int,
+        default=None,
+        help="Audit a PR through the GitHub API (requires network and a token for private repos)",
+    )
+    hist.add_argument("--repo", default=None, help="GitHub owner/repo for --github-pr (default: origin)")
     hist.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
 
     adr = sub.add_parser("adr", help="Architecture decision records")
@@ -105,16 +113,41 @@ def cmd_baseline(args: argparse.Namespace) -> int:
     return 0
 
 
+def _history_github(root: Path, config, args: argparse.Namespace):
+    if args.since or args.head:
+        print("aed: --github-pr cannot be combined with --since/--head", file=sys.stderr)
+        return None
+    slug = args.repo or github_audit.slug_from_remote(root)
+    if not slug:
+        print("aed: cannot determine GitHub repository; pass --repo owner/name", file=sys.stderr)
+        return None
+    client = github_audit.GitHubClient(slug)
+    points = history_audit.evaluate_github(
+        root, config, args.github_pr, max(1, args.limit), client
+    )
+    source = {"github_pr": args.github_pr, "repo": slug, "api": "github"}
+    header = f"PR #{args.github_pr} via GitHub API ({slug}; retention not guaranteed)"
+    return points, source, header
+
+
 def cmd_history(args: argparse.Namespace) -> int:
     root = repo_root(Path(args.path))
     config = load_config(root)
-    points = history_audit.evaluate(
-        root, config, limit=max(1, args.limit), since=args.since, head=args.head
-    )
-    if args.json:
-        print(json.dumps(history_audit.json_payload(points), indent=2))
+    if args.github_pr is not None:
+        prepared = _history_github(root, config, args)
+        if prepared is None:
+            return 2
+        points, source, header = prepared
     else:
-        print(history_audit.render_text(points))
+        points = history_audit.evaluate(
+            root, config, limit=max(1, args.limit), since=args.since, head=args.head or "HEAD"
+        )
+        source = None
+        header = "first-parent commits"
+    if args.json:
+        print(json.dumps(history_audit.json_payload(points, source), indent=2))
+    else:
+        print(history_audit.render_text(points, header))
     return 0
 
 
@@ -188,6 +221,9 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_adr_new(args)
         if args.cmd == "rules":
             return cmd_rules(args)
+    except github_audit.GitHubError as exc:
+        print(f"aed: {exc}", file=sys.stderr)
+        return 2
     except GitError as exc:
         print(f"aed: {exc}", file=sys.stderr)
         if "unknown revision" in str(exc).lower() or "needed a single revision" in str(exc).lower():

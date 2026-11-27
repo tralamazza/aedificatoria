@@ -189,9 +189,29 @@ aed history --head refs/remotes/origin/pr/123 --since origin/main
 
 `--head` accepts any ref or commit, so this also works for a preserved branch,
 a merge-queue ref, or a commit recovered from `git fsck`. If the host has purged
-the PR refs, the intermediate commits are unrecoverable offline; only the host
-API or a previously stored `aed history --json` artifact can help. Persist the
-history JSON at merge time if you need a durable audit trail.
+the PR refs, the intermediate commits may still exist as PR data.
+
+#### GitHub API fallback
+
+When even the PR refs are gone, GitHub may still retain the PR commits. The
+opt-in mode reconstructs them through the REST API:
+
+```sh
+GITHUB_TOKEN=... aed history --github-pr 123 --repo owner/repo --limit 20
+```
+
+It lists the PR commits (`GET /pulls/{n}/commits`, capped by GitHub at 250),
+downloads a source tarball per commit, and reads commit stats for churn. Local
+commit objects are used when available. A token is required for private repos
+and higher rate limits; `GITHUB_API_URL` selects GitHub Enterprise. Results are
+report-only and never part of `aed check`. The first commit in the analyzed
+window is the baseline; branch-level growth is still audited by
+`aed check --base` before merge.
+
+This is inherently non-hermetic: it needs network access, credentials, and
+GitHub's retention of the PR objects. A purged commit returns 404 and the
+internals are unrecoverable. Persist `aed history --json` at merge time when a
+durable audit is required.
 
 Limits: first-parent only; the current configuration is used for every commit;
 historical ADRs, one-way doors, and config weakening are not re-evaluated; cost
@@ -260,6 +280,9 @@ the change. Hidden tests should still live outside the agent's writable tree.
   commit, and do not re-evaluate historical ADRs or one-way doors. Squash merges
   are atomic: history detects PR-style squashes and flags oversized ones, but the
   intermediate commits are unrecoverable. Check the PR branch before squashing.
+- The GitHub API fallback is opt-in and non-hermetic: it needs a token, network,
+  and GitHub retention; the PR commit list is capped at 250. It never affects
+  `aed check`.
 - The guard is per-diff. An ADR-authorized configuration weakening still exits 0,
   replacing an assertion with a weaker one while keeping the count is semantic
   and not detected, and cumulative drift across many small commits is handled

@@ -8,14 +8,21 @@ current baseline has already accepted them.
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from pathlib import Path
 import re
-from typing import Any
+from typing import Any, Generator
 
-from . import baseline
+from . import baseline, github
 from .config import Config
-from .git import base_worktree, commit_parents, diff_stats, history_commits
+from .git import (
+    base_worktree,
+    commit_exists,
+    commit_parents,
+    diff_stats,
+    history_commits,
+)
 from .model import Finding
 from .pyast import strongly_connected
 
@@ -249,6 +256,49 @@ def evaluate(
     return points
 
 
+@contextmanager
+def _materialize(repo: Path, sha: str, client: Any) -> Generator[Path, None, None]:
+    if commit_exists(repo, sha):
+        with base_worktree(repo, sha) as tree:
+            yield tree
+    else:
+        with client.tarball(sha) as tree:
+            yield tree
+
+
+def evaluate_github(
+    repo: Path,
+    config: Config,
+    pr: int,
+    limit: int,
+    client: Any,
+) -> list[HistoryPoint]:
+    points: list[HistoryPoint] = []
+    previous: dict[str, Any] | None = None
+    for item in client.pr_commits(pr, limit):
+        with _materialize(repo, item.sha, client) as root:
+            metrics = baseline.collect(root, config)
+        regressions = (
+            []
+            if previous is None
+            else _regressions(previous, metrics, config, item.sha, item.subject)
+        )
+        points.append(
+            _point(
+                item.sha,
+                item.date,
+                item.subject,
+                item.parents,
+                item.files,
+                item.lines,
+                metrics,
+                regressions,
+            )
+        )
+        previous = metrics
+    return points
+
+
 def worst(points: list[HistoryPoint], limit: int = 5) -> list[HistoryPoint]:
     ranked = sorted(
         (point for point in points if point.regressions),
@@ -263,11 +313,11 @@ def _delta(value: int, previous: int | None) -> str:
     return f"{value} ({value - previous:+d})"
 
 
-def render_text(points: list[HistoryPoint]) -> str:
+def render_text(points: list[HistoryPoint], header: str = "first-parent commits") -> str:
     if not points:
-        return "AEDIFICATORIA HISTORY\n\nno commits"
+        return f"AEDIFICATORIA HISTORY  {header}\n\nno commits"
     lines = [
-        "AEDIFICATORIA HISTORY  first-parent commits",
+        f"AEDIFICATORIA HISTORY  {header}",
         "",
         "commit    date        kind        complexity      api       deps  edges  tests  assert  churn       regr",
     ]
@@ -301,10 +351,15 @@ def render_text(points: list[HistoryPoint]) -> str:
     return "\n".join(lines)
 
 
-def json_payload(points: list[HistoryPoint]) -> dict[str, Any]:
-    return {
+def json_payload(
+    points: list[HistoryPoint], source: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
         "tool": "aedificatoria",
         "kind": "history",
         "commits": [point.as_dict() for point in points],
         "worst": [point.as_dict() for point in worst(points)],
     }
+    if source is not None:
+        payload["source"] = source
+    return payload
