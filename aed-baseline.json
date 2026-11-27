@@ -527,6 +527,7 @@
       "test_history_detects_complexity_regression": 5,
       "test_history_detects_new_cycle": 1,
       "test_history_detects_new_dependency": 1,
+      "test_history_head_ref": 1,
       "test_history_marks_squash_and_flags_oversized_atomic": 7
     },
     "tests/test_jsts.py": {

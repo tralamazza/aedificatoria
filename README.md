@@ -172,8 +172,26 @@ aed history --since origin/main
 aed check --base origin/main
 ```
 
-Squashing permanently discards the intermediate commits. For architecture-
-sensitive work, prefer a merge or rebase merge so the commits remain analyzable.
+Squashing permanently discards the intermediate commits from `main`. For
+architecture-sensitive work, prefer a merge or rebase merge so the commits remain
+analyzable.
+
+#### Recovering a squashed PR
+
+The branch may be gone, but hosting providers often keep pull-request refs after
+deletion. GitHub exposes `refs/pull/<N>/head`; fetch it yourself (aed never touches
+the network), then point history at that tip:
+
+```sh
+git fetch origin '+refs/pull/*/head:refs/remotes/origin/pr/*'
+aed history --head refs/remotes/origin/pr/123 --since origin/main
+```
+
+`--head` accepts any ref or commit, so this also works for a preserved branch,
+a merge-queue ref, or a commit recovered from `git fsck`. If the host has purged
+the PR refs, the intermediate commits are unrecoverable offline; only the host
+API or a previously stored `aed history --json` artifact can help. Persist the
+history JSON at merge time if you need a durable audit trail.
 
 Limits: first-parent only; the current configuration is used for every commit;
 historical ADRs, one-way doors, and config weakening are not re-evaluated; cost

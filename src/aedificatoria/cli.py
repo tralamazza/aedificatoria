@@ -48,6 +48,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_path(hist)
     hist.add_argument("--limit", type=int, default=20, help="First-parent commits to inspect (default: 20)")
     hist.add_argument("--since", default=None, help="Only commits after this revision")
+    hist.add_argument("--head", default="HEAD", help="Tip revision to inspect (default: HEAD)")
     hist.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
 
     adr = sub.add_parser("adr", help="Architecture decision records")
@@ -107,7 +108,9 @@ def cmd_baseline(args: argparse.Namespace) -> int:
 def cmd_history(args: argparse.Namespace) -> int:
     root = repo_root(Path(args.path))
     config = load_config(root)
-    points = history_audit.evaluate(root, config, limit=max(1, args.limit), since=args.since)
+    points = history_audit.evaluate(
+        root, config, limit=max(1, args.limit), since=args.since, head=args.head
+    )
     if args.json:
         print(json.dumps(history_audit.json_payload(points), indent=2))
     else:

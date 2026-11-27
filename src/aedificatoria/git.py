@@ -57,9 +57,14 @@ def resolve_commit(repo: Path, ref: str) -> str:
     return os.fsdecode(proc.stdout).strip()
 
 
-def history_commits(repo: Path, limit: int, since: str | None = None) -> list[tuple[str, str, str]]:
-    """Return up to `limit` first-parent commits, oldest first."""
-    revision = f"{since}..HEAD" if since else "HEAD"
+def history_commits(
+    repo: Path,
+    limit: int,
+    since: str | None = None,
+    head: str = "HEAD",
+) -> list[tuple[str, str, str]]:
+    """Return up to `limit` first-parent commits ending at `head`, oldest first."""
+    revision = f"{since}..{head}" if since else head
     proc = _git(
         repo,
         "log",

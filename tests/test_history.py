@@ -47,6 +47,18 @@ def test_history_detects_new_cycle(repo: Path, commit, write):
     assert any("new package cycle" in item.message for item in points[-1].regressions)
 
 
+def test_history_head_ref(repo: Path, commit, write):
+    write(repo, "app.py", "value = 1\n")
+    commit(repo, "first")
+    write(repo, "app.py", "value = 2\n")
+    commit(repo, "second")
+    write(repo, "app.py", "value = 3\n")
+    commit(repo, "third")
+
+    points = history.evaluate(repo, Config(), limit=5, head="HEAD~1")
+    assert [point.subject for point in points] == ["first", "second"]
+
+
 def test_history_marks_squash_and_flags_oversized_atomic(repo: Path, commit, write):
     write(repo, "README.md", "base\n")
     write(repo, "seed.py", "value = 0\n")

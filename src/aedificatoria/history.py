@@ -225,10 +225,11 @@ def evaluate(
     config: Config,
     limit: int = 20,
     since: str | None = None,
+    head: str = "HEAD",
 ) -> list[HistoryPoint]:
     points: list[HistoryPoint] = []
     previous: dict[str, Any] | None = None
-    for commit, date, subject in history_commits(repo, limit, since):
+    for commit, date, subject in history_commits(repo, limit, since, head):
         parents = commit_parents(repo, commit)
         base = parents[0] if parents else None
         files, lines = diff_stats(repo, base, commit)
