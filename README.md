@@ -50,6 +50,13 @@ uv pip install -e '.[dev]'
 
 `aed check` never stages or commits.
 
+## Usefulness evaluation
+
+The mutation benchmark and agent A/B protocol live in
+[`benchmarks/usefulness`](benchmarks/usefulness/README.md). CI runs the labeled
+mutation corpus with a recall/false-block gate; real-world history audits remain
+separate diagnostic evidence.
+
 ## Tool diagnostics
 
 ```sh

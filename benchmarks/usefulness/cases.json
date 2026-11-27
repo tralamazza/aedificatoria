@@ -1,0 +1,272 @@
+{
+  "cases": [
+    {
+      "name": "test_assertion_removed",
+      "description": "An assertion is removed from an existing test.",
+      "expect": "block",
+      "rules": ["test-tampering"],
+      "base": {
+        "README.md": "base\n",
+        "tests/test_math.py": "def test_add():\n    assert 1 == 1\n    assert 2 == 2\n"
+      },
+      "changes": [
+        {
+          "op": "write",
+          "path": "tests/test_math.py",
+          "content": "def test_add():\n    assert 1 == 1\n"
+        }
+      ]
+    },
+    {
+      "name": "one_way_door_added",
+      "description": "A migration is added without an accepted ADR.",
+      "expect": "block",
+      "rules": ["one-way-door"],
+      "base": {"README.md": "base\n"},
+      "changes": [
+        {
+          "op": "write",
+          "path": "migrations/0001_init.sql",
+          "content": "create table t;\n"
+        }
+      ]
+    },
+    {
+      "name": "one_way_door_renamed",
+      "description": "A protected migration is moved outside its protected directory.",
+      "expect": "block",
+      "rules": ["one-way-door"],
+      "base": {
+        "README.md": "base\n",
+        "migrations/0001_init.sql": "create table t;\n"
+      },
+      "changes": [
+        {
+          "op": "rename",
+          "from": "migrations/0001_init.sql",
+          "to": "archive/0001_init.sql"
+        }
+      ]
+    },
+    {
+      "name": "public_api_break",
+      "description": "An existing public function gains a required parameter.",
+      "expect": "block",
+      "rules": ["public-api"],
+      "base": {
+        "README.md": "base\n",
+        "service.py": "def handle(x: int) -> int:\n    return x\n"
+      },
+      "changes": [
+        {
+          "op": "write",
+          "path": "service.py",
+          "content": "def handle(x: int, y: int) -> int:\n    return x + y\n"
+        }
+      ]
+    },
+    {
+      "name": "new_dependency",
+      "description": "A production file imports an unapproved third-party package.",
+      "expect": "block",
+      "rules": ["new-dependency"],
+      "base": {"README.md": "base\n"},
+      "changes": [
+        {
+          "op": "write",
+          "path": "app.py",
+          "content": "import sphinx\n"
+        }
+      ]
+    },
+    {
+      "name": "syntax_error",
+      "description": "A changed Python file no longer parses.",
+      "expect": "block",
+      "rules": ["syntax-error"],
+      "base": {
+        "README.md": "base\n",
+        "app.py": "def f(x: int) -> int:\n    return x\n"
+      },
+      "changes": [
+        {
+          "op": "write",
+          "path": "app.py",
+          "content": "def f(x):\n    return (x\n"
+        }
+      ]
+    },
+    {
+      "name": "complexity_growth",
+      "description": "A changed function exceeds the configured complexity limit.",
+      "expect": "block",
+      "rules": ["complexity"],
+      "base": {
+        "README.md": "base\n",
+        "aed.toml": "[thresholds]\nmax_complexity = 3\n",
+        "risk.py": "value = 1\n"
+      },
+      "changes": [
+        {
+          "op": "write",
+          "path": "risk.py",
+          "content": "def score(x):\n    if x == 1:\n        return 1\n    if x == 2:\n        return 2\n    if x == 3:\n        return 3\n    return 0\n"
+        }
+      ]
+    },
+    {
+      "name": "import_cycle",
+      "description": "Two top-level modules become mutually dependent.",
+      "expect": "block",
+      "rules": ["import-cycle"],
+      "base": {
+        "README.md": "base\n",
+        "a.py": "value = 1\n",
+        "b.py": "value = 2\n"
+      },
+      "changes": [
+        {"op": "write", "path": "a.py", "content": "import b\nvalue = 1\n"},
+        {"op": "write", "path": "b.py", "content": "import a\nvalue = 2\n"}
+      ]
+    },
+    {
+      "name": "forbidden_edge",
+      "description": "API code imports a database module forbidden by config.",
+      "expect": "block",
+      "rules": ["forbidden-edge"],
+      "base": {
+        "README.md": "base\n",
+        "aed.toml": "[aed]\nsource_roots = [\".\"]\n\n[[aed.forbidden_edges]]\nfrom = \"api\"\nto = \"db\"\n",
+        "api.py": "value = 1\n",
+        "db.py": "value = 2\n"
+      },
+      "changes": [
+        {"op": "write", "path": "api.py", "content": "import db\nvalue = 1\n"}
+      ]
+    },
+    {
+      "name": "change_amplification",
+      "description": "A change exceeds the default file-count budget without an ADR.",
+      "expect": "block",
+      "rules": ["change-amplification"],
+      "base": {"README.md": "base\n"},
+      "changes": [
+        {
+          "op": "write_many",
+          "prefix": "bulk/",
+          "count": 26,
+          "content": "value = 1\n"
+        }
+      ]
+    },
+    {
+      "name": "test_config_changed",
+      "description": "Pytest configuration is changed.",
+      "expect": "review",
+      "rules": ["test-config"],
+      "base": {
+        "README.md": "base\n",
+        "pyproject.toml": "[tool.pytest.ini_options]\naddopts = \"-q\"\n"
+      },
+      "changes": [
+        {
+          "op": "write",
+          "path": "pyproject.toml",
+          "content": "[tool.pytest.ini_options]\naddopts = \"\"\n"
+        }
+      ]
+    },
+    {
+      "name": "adr_quality",
+      "description": "A new ADR is structurally incomplete.",
+      "expect": "review",
+      "rules": ["adr-quality"],
+      "base": {"README.md": "base\n"},
+      "changes": [
+        {
+          "op": "write",
+          "path": "docs/decisions/0002-bad.md",
+          "content": "# 0002. Incomplete\n"
+        }
+      ]
+    },
+    {
+      "name": "docs_import_is_ignored",
+      "description": "A docs-only third-party import is outside production metrics.",
+      "expect": "allow",
+      "rules": [],
+      "base": {"README.md": "base\n"},
+      "changes": [
+        {"op": "write", "path": "docs/conf.py", "content": "import sphinx\n"}
+      ]
+    },
+    {
+      "name": "bom_python_is_valid",
+      "description": "A valid BOM-prefixed Python file must not be a syntax error.",
+      "expect": "allow",
+      "rules": [],
+      "base": {"README.md": "base\n", "app.py": "def f(x: int) -> int:\n    return x\n"},
+      "changes": [
+        {
+          "op": "write",
+          "path": "app.py",
+          "content": "\ufeffdef f(x: int) -> int:\n    return x\n"
+        }
+      ]
+    },
+    {
+      "name": "split_reexports_are_stable",
+      "description": "Splitting a package re-export must not change its API.",
+      "expect": "allow",
+      "rules": [],
+      "base": {
+        "README.md": "base\n",
+        "pkg/_internal.py": "def a():\n    return 1\n\ndef b():\n    return 2\n",
+        "pkg/__init__.py": "from ._internal import a, b\n"
+      },
+      "changes": [
+        {
+          "op": "write",
+          "path": "pkg/__init__.py",
+          "content": "from ._internal import a\nfrom ._internal import b\n"
+        }
+      ]
+    },
+    {
+      "name": "rust_private_impl_is_not_api",
+      "description": "Changing a private Rust impl must not break public API.",
+      "expect": "allow",
+      "rules": [],
+      "base": {
+        "README.md": "base\n",
+        "Cargo.toml": "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        "src/lib.rs": "pub trait Visible { fn show(&self); }\npub struct Public;\nimpl Public { pub fn show(&self) {} }\ntrait Secret { fn hide(&self); }\nstruct Hidden;\nimpl Hidden { fn hide(&self) {} }\n"
+      },
+      "changes": [
+        {
+          "op": "write",
+          "path": "src/lib.rs",
+          "content": "pub trait Visible { fn show(&self); }\npub struct Public;\nimpl Public { pub fn show(&self) {} }\ntrait Secret { fn hide(&self, more: bool); }\nstruct Hidden;\nimpl Hidden { fn hide(&self, more: bool) {} }\n"
+        }
+      ]
+    },
+    {
+      "name": "js_interface_comment_is_stable",
+      "description": "A comment inside an exported interface must not change API.",
+      "expect": "allow",
+      "rules": [],
+      "base": {
+        "README.md": "base\n",
+        "package.json": "{\"private\": true}\n",
+        "src/app.ts": "export interface X { a: string; }\n"
+      },
+      "changes": [
+        {
+          "op": "write",
+          "path": "src/app.ts",
+          "content": "export interface X {\n  // Internal note.\n  a: string;\n}\n"
+        }
+      ]
+    }
+  ]
+}

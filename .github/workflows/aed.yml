@@ -28,6 +28,9 @@ jobs:
       - name: Tests
         run: python -m pytest -q
 
+      - name: Usefulness mutation benchmark
+        run: python benchmarks/usefulness/run.py --gate --output /tmp/usefulness.json
+
       - name: Resolve base
         id: base
         env:
