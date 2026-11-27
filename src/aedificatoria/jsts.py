@@ -961,6 +961,13 @@ class RepoIndex:
 
     def _scan(self) -> None:
         manifests, sources, configs = _repo_files(self.root)
+        self._load_manifests(manifests)
+        self._load_configs(configs)
+        self._load_sources(sources)
+
+    def _load_manifests(self, manifests: list[str]) -> None:
+        self.packages = {}
+        self.deps = {}
         for rel in manifests:
             facts = _read_package(self.root, rel)
             if facts is None:
@@ -969,10 +976,16 @@ class RepoIndex:
             self.packages[posixpath.dirname(rel)] = name
             for dependency, site in deps.items():
                 self.deps.setdefault(dependency, site)
+
+    def _load_configs(self, configs: list[str]) -> None:
+        self.tsconfigs = {}
         for rel in configs:
             config = _read_tsconfig(self.root, rel)
             if config is not None:
                 self.tsconfigs[posixpath.dirname(rel)] = config
+
+    def _load_sources(self, sources: list[str]) -> None:
+        self.files = {}
         for rel in sources:
             try:
                 text = (self.root / rel).read_text(encoding="utf-8")
@@ -981,6 +994,46 @@ class RepoIndex:
             tree = parse_text(rel, text)
             if tree is not None:
                 self.files[rel] = tree
+
+    def _load_source(self, rel: str) -> None:
+        if any(part in _SKIP_DIRS for part in rel.split("/")[:-1]):
+            return
+        try:
+            text = (self.root / rel).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            self.files.pop(rel, None)
+            return
+        tree = parse_text(rel, text)
+        if tree is not None:
+            self.files[rel] = tree
+        else:
+            self.files.pop(rel, None)
+
+    def update(
+        self,
+        changes: list[tuple[str, str | None, str | None]],
+    ) -> None:
+        manifests_changed = False
+        configs_changed = False
+        for _status, old_path, new_path in changes:
+            for path in (old_path, new_path):
+                if path is None or not path.endswith(EXTENSIONS):
+                    continue
+                self.files.pop(path, None)
+            if new_path and new_path.endswith(EXTENSIONS):
+                self._load_source(new_path)
+            for path in (old_path, new_path):
+                if path is None:
+                    continue
+                name = posixpath.basename(path)
+                manifests_changed = manifests_changed or name == "package.json"
+                configs_changed = configs_changed or name in {"tsconfig.json", "jsconfig.json"}
+        if manifests_changed or configs_changed:
+            manifests, _sources, configs = _repo_files(self.root)
+            if manifests_changed:
+                self._load_manifests(manifests)
+            if configs_changed:
+                self._load_configs(configs)
 
     def package_of(self, rel: str) -> str:
         directory = posixpath.dirname(rel)
@@ -1030,6 +1083,14 @@ def _cached_index(root: str) -> RepoIndex:
 
 def _clear_index_cache() -> None:
     _cached_index.cache_clear()
+
+
+def _update_index(
+    root: Path,
+    changes: list[tuple[str, str | None, str | None]],
+) -> None:
+    if root.name.startswith("tree-aed-"):
+        _cached_index(str(root)).update(changes)
 
 
 def _index_for(root: Path) -> RepoIndex:

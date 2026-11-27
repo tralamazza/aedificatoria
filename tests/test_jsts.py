@@ -384,6 +384,32 @@ def test_js_local_workspace_dependency_is_not_new(repo: Path, commit, write):
     assert not any(item.rule == "new-dependency" for item in findings)
 
 
+def test_repo_index_update_matches_fresh(tmp_path: Path):
+    root = tmp_path / "tree-aed-index"
+    (root / "src").mkdir(parents=True)
+    (root / "package.json").write_text('{"name": "app", "dependencies": {"react": "^1"}}\n')
+    (root / "src" / "a.ts").write_text("import 'react';\nexport const a = 1;\n")
+    (root / "src" / "old.ts").write_text("export const old = 1;\n")
+    index = jsts.RepoIndex(root)
+    (root / "src" / "a.ts").write_text("import 'vue';\nexport const a = 1;\n")
+    (root / "src" / "old.ts").unlink()
+    (root / "src" / "b.ts").write_text("export const b = 2;\n")
+    (root / "package.json").write_text('{"name": "app", "dependencies": {"vue": "^1"}}\n')
+    index.update(
+        [
+            ("M", "src/a.ts", "src/a.ts"),
+            ("D", "src/old.ts", None),
+            ("A", None, "src/b.ts"),
+            ("M", "package.json", "package.json"),
+        ]
+    )
+    fresh = jsts.RepoIndex(root)
+    assert index.files.keys() == fresh.files.keys()
+    assert index.packages == fresh.packages
+    assert index.deps == fresh.deps
+    assert index.tsconfigs == fresh.tsconfigs
+
+
 def test_config_defaults_cover_js_ts():
     config = Config()
     assert config.is_test("src/math.test.ts")

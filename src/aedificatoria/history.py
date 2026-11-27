@@ -15,7 +15,7 @@ from pathlib import Path
 import re
 from typing import Any, Generator
 
-from . import baseline
+from . import baseline, jsts
 from .config import Config
 from .git import (
     _checkout_tree,
@@ -319,18 +319,24 @@ def _collect_chunk(
     if not commits:
         return []
     results: list[dict[str, Any]] = []
-    with _worktree_tree(Path(repo), commits[0]) as tree:
-        previous: dict[str, Any] | None = None
-        for index, sha in enumerate(commits):
-            if index:
-                changes = diff_paths(Path(repo), commits[index - 1], sha)
-                _checkout_tree(tree, sha)
-                assert previous is not None
-                current = baseline.update(previous, tree, config, changes)
-            else:
-                current = baseline.collect(tree, config)
-            results.append(current)
-            previous = current
+    try:
+        with _worktree_tree(Path(repo), commits[0]) as tree:
+            previous: dict[str, Any] | None = None
+            for index, sha in enumerate(commits):
+                if index:
+                    changes = diff_paths(Path(repo), commits[index - 1], sha)
+                    _checkout_tree(tree, sha)
+                    jsts._update_index(tree, changes)
+                    assert previous is not None
+                    current = baseline.update(
+                        previous, tree, config, changes, preserve_index=True
+                    )
+                else:
+                    current = baseline.collect(tree, config, preserve_index=True)
+                results.append(current)
+                previous = current
+    finally:
+        jsts._clear_index_cache()
     return results
 
 

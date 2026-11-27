@@ -9,14 +9,14 @@ Findings are history metric regressions, not `aed check` verdicts.
 |---|---|---|---:|---:|---:|
 | `pallets/click` | Python | 2014-08-15..2026-11-16 | 85s | 2,860 | 331 |
 | `BurntSushi/ripgrep` | Rust | 2020-02-20..2026-11-24 | 103s | 862 | 193 |
-| `vitejs/vite` | TypeScript | 2026-02-26..2026-11-27 | 121s (was 530s) | 1,513 | 393 |
+| `vitejs/vite` | TypeScript | 2026-02-26..2026-11-27 | 94s (was 530s) | 1,513 | 393 |
 | `expressjs/express` | JavaScript | 2012-07-06..2026-11-03 | 110s | 729 | 214 |
 
 Parallelism was `--jobs 12`, except Express used `--jobs 4` while Vite was
 running. After ADR 0026 worktree/parse reuse, ADR 0027 per-file facts, and
-ADR 0028 incremental updates, Vite dropped from 530s to 121s (100 commits:
-57s to ~16s). Regression sets and metrics match the full analysis; findings are
-now deterministically sorted.
+ADR 0028 incremental updates and ADR 0029 incremental RepoIndex, Vite
+dropped from 530s to 94s (100 commits: 57s to ~14s). Regression sets and metrics
+match the full analysis; findings are now deterministically sorted.
 
 ## Smaller controls
 
@@ -69,7 +69,7 @@ ADRs: [`0024`](decisions/0024-real-world-audit-fixes.md),
   zero growth caps. That is diagnostic, not automatically a defect.
 - Test rewrites in large migration commits look like test tampering. The guard
   cannot distinguish a deliberate rewrite from a weakened suite without review.
-- Vite-scale repositories remain metric-traversal-bound after worktree reuse;
-  further speedup requires caching per-file metrics, not more checkout tuning.
+- Vite remains per-file I/O and project-graph aggregation bound; changed files are
+  recollected, but dependency/edge aggregation still walks the source inventory.
 - History uses the current configuration for every commit; historical policy
   changes are not re-evaluated.

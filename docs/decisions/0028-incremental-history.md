@@ -3,6 +3,8 @@
 - Status: accepted
 - Date: 2026-11-27
 
+- Amended by: 0029 (incremental RepoIndex)
+
 ## Context
 
 After per-file caches, Vite history still walked and read every source file for

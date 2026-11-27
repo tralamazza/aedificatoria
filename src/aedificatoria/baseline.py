@@ -93,14 +93,18 @@ def _finish(
     root: Path,
     config: Config,
     data: dict[str, Any],
+    *,
+    preserve_index: bool = False,
 ) -> dict[str, Any]:
-    jsts._clear_index_cache()
+    if not preserve_index:
+        jsts._clear_index_cache()
     try:
         data["dependencies"] = _dependencies(root, config)
         edges, _packages = languages.package_graph(root, config)
         data["edges"] = [list(edge) for edge in sorted(edges)]
     finally:
-        jsts._clear_index_cache()
+        if not preserve_index:
+            jsts._clear_index_cache()
     return data
 
 
@@ -128,19 +132,27 @@ def update(
     root: Path,
     config: Config,
     changes: list[tuple[str, str | None, str | None]],
+    *,
+    preserve_index: bool = False,
 ) -> dict[str, Any]:
     """Recompute only changed paths from a previous full metric snapshot."""
     data = _copy_data(previous)
-    jsts._clear_index_cache()
+    if not preserve_index:
+        jsts._clear_index_cache()
     for _status, old_path, new_path in changes:
         _drop_file(data, old_path)
         _drop_file(data, new_path)
         if new_path is not None:
             _collect_file(root, new_path, config, data)
-    return _finish(root, config, data)
+    return _finish(root, config, data, preserve_index=preserve_index)
 
 
-def collect(root: Path, config: Config) -> dict[str, Any]:
+def collect(
+    root: Path,
+    config: Config,
+    *,
+    preserve_index: bool = False,
+) -> dict[str, Any]:
     data: dict[str, Any] = {
         "version": VERSION,
         "complexity": {},
@@ -152,7 +164,7 @@ def collect(root: Path, config: Config) -> dict[str, Any]:
     }
     for rel in _source_files(root, config):
         _collect_file(root, rel, config, data)
-    return _finish(root, config, data)
+    return _finish(root, config, data, preserve_index=preserve_index)
 
 
 def load(root: Path, path: str) -> dict[str, Any] | None:
