@@ -150,23 +150,86 @@ Deep semantics, recovery, and caveats: [`docs/history.md`](docs/history.md).
 
 ## Agent and CI integration
 
-```sh
-aed check --json > /tmp/aed.json
-aed check --staged --json > /tmp/aed-staged.json  # pre-commit
+### Agent harness
+
+Apply the candidate patch, then run the guard before commit:
+
+```python
+import json
+import subprocess
+
+def run_guard(repo: str, base: str | None = None, staged: bool = False):
+    cmd = ["aed", "check", "--path", repo, "--json"]
+    if base:
+        cmd += ["--base", base]
+    if staged:
+        cmd.append("--staged")
+
+    proc = subprocess.run(cmd, text=True, capture_output=True)
+    try:
+        result = json.loads(proc.stdout)
+    except json.JSONDecodeError:
+        raise RuntimeError(proc.stderr or "aed produced no JSON")
+
+    if result["verdict"] == "block":
+        return "block", result["findings"]
+    if result["verdict"] == "review":
+        return "human", result["findings"]
+    return "allow", []
 ```
 
-If `verdict == "block"` (exit `2`), do not commit. `findings` gives the rule,
-path, line, and evidence for the repair loop.
+Harness policy:
 
-Enable the committed hook once per clone:
+- `block` / exit `2`: feed `rule`, `path`, `line`, and `message` back into the
+  repair loop; cap retries, then fail.
+- `review` / exit `0`: stop for human approval; do not auto-commit.
+- `allow`: commit.
+- Run `aed check --staged --json` immediately before committing to check the
+  exact index.
+- Exit `2` also covers CLI/git/config errors, so parse the JSON rather than
+  treating every failure as a finding.
+
+### CI
+
+```yaml
+- uses: actions/checkout@v4
+  with:
+    fetch-depth: 0
+- uses: actions/setup-python@v5
+  with:
+    python-version: "3.11"
+- run: pip install -e .
+- name: Guard
+  env:
+    BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+  run: aed check --base "$BASE" --json > aed.json
+```
+
+- `fetch-depth: 0` is required so `--base` is resolvable.
+- This repository installs the guard with `pip install -e .`. In another project,
+  replace that line with a pinned `aedificatoria` package/commit install.
+- If the event base is missing or the zero SHA, resolve
+  `git merge-base HEAD origin/main`; the repository workflow does this and the
+  HEAD~1 fallback already: [`.github/workflows/aed.yml`](.github/workflows/aed.yml).
+- CI uses working-tree mode. `--staged` is for pre-commit.
+- `review` exits `0`; to fail warnings too:
+  `jq -e '.verdict == "allow"' aed.json >/dev/null`.
+- Upload `aed.json` as an artifact even on failure.
+
+### Pre-commit and trust boundary
 
 ```sh
 git config core.hooksPath .githooks
 ```
 
-The hook runs `aed check --staged`, so it checks exactly the index being
-committed. `--no-verify` bypasses the local hook; CI is authoritative. See
-[`.github/workflows/aed.yml`](.github/workflows/aed.yml).
+The hook runs `aed check --staged`; `--no-verify` can bypass it locally, so CI
+is authoritative.
+
+The guard is not a sandbox. Protect `aed.toml`, `aed-baseline.json`,
+`docs/decisions/**`, `.githooks/pre-commit`, and `.github/workflows/aed.yml`
+with `CODEOWNERS`/branch protection. `guard-config` detects verifier edits, but
+an accepted ADR authorizes them; make ADR acceptance a human gate. Install `aed`
+from a pinned version outside the agent-writable workspace when possible.
 
 ## Languages
 
