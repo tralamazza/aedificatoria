@@ -10,6 +10,8 @@ a deliberate, ADR-gated change.
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -18,6 +20,7 @@ from . import jsts, languages, pyast
 from .config import Config
 from .git import _SKIP_DIRS, tracked_source_files
 from .model import Finding, TestInfo
+from .paths import ConfinedPathError, confined, read_text
 
 VERSION = 3
 _EVIDENCE = "Run `aed baseline` with an accepted ADR to reset the ratchet."
@@ -59,8 +62,8 @@ def _collect_file(root: Path, rel: str, config: Config, data: dict[str, Any]) ->
     if adapter is None:
         return
     try:
-        text = (root / rel).read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
+        text = read_text(root, rel)
+    except (OSError, UnicodeDecodeError, ConfinedPathError):
         return
     info, scores, surface = _file_facts(adapter.name, Path(rel).suffix, text)
     if info.counts:
@@ -127,6 +130,14 @@ def _drop_file(data: dict[str, Any], path: str | None) -> None:
         data[key].pop(path, None)
 
 
+def _refresh_initializers(root: Path, config: Config, data: dict[str, Any]) -> None:
+    for rel in _source_files(root, config):
+        if Path(rel).name != "__init__.py":
+            continue
+        data["api"].pop(rel, None)
+        _collect_file(root, rel, config, data)
+
+
 def update(
     previous: dict[str, Any],
     root: Path,
@@ -135,15 +146,20 @@ def update(
     *,
     preserve_index: bool = False,
 ) -> dict[str, Any]:
-    """Recompute only changed paths from a previous full metric snapshot."""
+    """Recompute changed paths and dependent package export surfaces."""
     data = _copy_data(previous)
     if not preserve_index:
         jsts._clear_index_cache()
+    changed_python = False
     for _status, old_path, new_path in changes:
         _drop_file(data, old_path)
         _drop_file(data, new_path)
+        if any(path and path.endswith(".py") for path in (old_path, new_path)):
+            changed_python = True
         if new_path is not None:
             _collect_file(root, new_path, config, data)
+    if changed_python:
+        _refresh_initializers(root, config, data)
     return _finish(root, config, data, preserve_index=preserve_index)
 
 
@@ -167,15 +183,26 @@ def collect(
     return _finish(root, config, data, preserve_index=preserve_index)
 
 
+def _baseline_path(root: Path, path: str) -> Path:
+    try:
+        candidate = confined(root, path)
+    except ConfinedPathError as exc:
+        raise BaselineError(str(exc)) from exc
+    raw = root / Path(path)
+    if raw.is_symlink():
+        raise BaselineError(f"baseline path must not be a symlink: {path}")
+    return candidate
+
+
 def load(root: Path, path: str) -> dict[str, Any] | None:
-    candidate = Path(path)
-    if not candidate.is_absolute():
-        candidate = root / candidate
+    candidate = _baseline_path(root, path)
     if not candidate.is_file():
         return None
     try:
+        if candidate.stat().st_size > 64 * 1024 * 1024:
+            raise BaselineError("baseline exceeds 64 MiB")
         data = json.loads(candidate.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise BaselineError(str(exc)) from exc
     if not isinstance(data, dict) or data.get("version") not in {1, 2, VERSION}:
         raise BaselineError(f"unsupported baseline format (expected version {VERSION})")
@@ -183,10 +210,24 @@ def load(root: Path, path: str) -> dict[str, Any] | None:
 
 
 def write(root: Path, path: str, data: dict[str, Any]) -> Path:
-    candidate = Path(path)
-    if not candidate.is_absolute():
-        candidate = root / candidate
-    candidate.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    candidate = _baseline_path(root, path)
+    payload = json.dumps(data, indent=2, sort_keys=True) + "\n"
+    candidate.parent.mkdir(parents=True, exist_ok=True)
+    handle = -1
+    temporary = ""
+    try:
+        handle, temporary = tempfile.mkstemp(prefix=".aed-baseline-", dir=candidate.parent)
+        with os.fdopen(handle, "w", encoding="utf-8") as stream:
+            handle = -1
+            stream.write(payload)
+        os.replace(temporary, candidate)
+    except OSError as exc:
+        raise BaselineError(f"could not write baseline {path}: {exc}") from exc
+    finally:
+        if handle >= 0:
+            os.close(handle)
+        if temporary:
+            Path(temporary).unlink(missing_ok=True)
     return candidate
 
 

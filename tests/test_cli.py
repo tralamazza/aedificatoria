@@ -5,7 +5,34 @@ import os
 import subprocess
 from pathlib import Path
 
+import pytest
+
+from aedificatoria.adr import create_adr
 from aedificatoria.cli import main
+from aedificatoria.config import Config
+
+
+def test_cli_adr_cannot_self_accept(repo: Path):
+    with pytest.raises(SystemExit):
+        main(["adr", "new", "unsafe", "--status", "accepted", "--path", str(repo)])
+
+
+def test_report_escapes_terminal_controls():
+    from aedificatoria.report import safe_text
+
+    assert safe_text("bad\x1b]52;c;payload") == "bad\\x1b]52;c;payload"
+
+
+def test_adr_rejects_escaping_paths(tmp_path: Path):
+    with pytest.raises(ValueError):
+        create_adr(tmp_path, "escape", config=Config(adr_dir="../../outside"))
+
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "decisions").symlink_to(outside, target_is_directory=True)
+    with pytest.raises(ValueError):
+        create_adr(tmp_path, "symlink", config=Config())
 
 
 def test_cli_init_and_adr(repo: Path):
@@ -88,6 +115,17 @@ def test_cli_staged_honors_hook_index(repo: Path, commit, write, capsys, monkeyp
     assert main(["check", "--path", str(repo), "--staged", "--json"]) == 2
     payload = json.loads(capsys.readouterr().out)
     assert any(item["rule"] == "test-tampering" for item in payload["findings"])
+
+
+def test_cli_malformed_config_returns_two(repo: Path, commit, write, capsys):
+    write(repo, "README.md", "base\n")
+    commit(repo)
+    write(repo, "aed.toml", "aed = [\n")
+
+    assert main(["check", "--path", str(repo)]) == 2
+    captured = capsys.readouterr()
+    assert "aed:" in captured.err
+    assert "Traceback" not in captured.err
 
 
 def test_cli_check_allows_clean_tree(repo: Path, commit, write, capsys):

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from aedificatoria import baseline
 from aedificatoria.checks import run_checks as run_all_checks
 from aedificatoria.cli import main
@@ -30,6 +32,47 @@ def evaluate(repo: Path, config: Config | None = None):
 def snapshot(repo: Path, config: Config | None = None) -> None:
     cfg = config or Config()
     baseline.write(repo, cfg.baseline_path, baseline.collect(repo, cfg))
+
+
+def test_baseline_write_rejects_escape_and_symlink(tmp_path: Path):
+    root = tmp_path / "repo"
+    root.mkdir()
+    outside = tmp_path / "outside.json"
+    outside.write_text("keep\n", encoding="utf-8")
+
+    with pytest.raises(baseline.BaselineError):
+        baseline.write(root, "../outside.json", {})
+    (root / "aed-baseline.json").symlink_to(outside)
+    with pytest.raises(baseline.BaselineError):
+        baseline.write(root, "aed-baseline.json", {})
+    with pytest.raises(baseline.BaselineError):
+        baseline.load(root, "aed-baseline.json")
+    assert outside.read_text(encoding="utf-8") == "keep\n"
+
+
+def test_incremental_refreshes_package_initializers(tmp_path: Path):
+    root = tmp_path / "repo"
+    (root / "src" / "pkg").mkdir(parents=True)
+    (root / "src" / "pkg" / "_internal.py").write_text(
+        "def handle(x):\n    return x\n", encoding="utf-8"
+    )
+    (root / "src" / "pkg" / "__init__.py").write_text(
+        "from ._internal import handle\n", encoding="utf-8"
+    )
+    config = Config()
+    first = baseline.collect(root, config)
+    (root / "src" / "pkg" / "_internal.py").write_text(
+        "def handle(x, y):\n    return x + y\n", encoding="utf-8"
+    )
+    updated = baseline.update(
+        first,
+        root,
+        config,
+        [("M", "src/pkg/_internal.py", "src/pkg/_internal.py")],
+    )
+    full = baseline.collect(root, config)
+    assert updated["api"] == full["api"]
+    assert "x,y" in updated["api"]["src/pkg/__init__.py"]["handle"]
 
 
 def test_incremental_update_matches_full_collect(tmp_path: Path):

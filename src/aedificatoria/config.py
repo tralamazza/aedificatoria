@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-import fnmatch
-import re
 import tomllib
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
+
+
+class ConfigError(ValueError):
+    pass
+
 
 _DEFAULT_EXCLUDES = (
     ".git/**",
@@ -207,31 +210,47 @@ class Config:
         return ""
 
 
-@lru_cache(maxsize=512)
-def _compile_glob(pattern: str) -> re.Pattern[str]:
-    out: list[str] = ["^"]
-    index = 0
-    while index < len(pattern):
-        char = pattern[index]
+@lru_cache(maxsize=4096)
+def _segment_match(pattern: str, text: str) -> bool:
+    @lru_cache(maxsize=None)
+    def walk(pattern_index: int, text_index: int) -> bool:
+        if pattern_index == len(pattern):
+            return text_index == len(text)
+        char = pattern[pattern_index]
         if char == "*":
-            if pattern[index : index + 2] == "**":
-                if pattern[index : index + 3] == "**/":
-                    out.append("(?:.*/)?")
-                    index += 3
-                else:
-                    out.append(".*")
-                    index += 2
-            else:
-                out.append("[^/]*")
-                index += 1
-        elif char == "?":
-            out.append("[^/]")
-            index += 1
-        else:
-            out.append(re.escape(char))
-            index += 1
-    out.append("$")
-    return re.compile("".join(out))
+            return walk(pattern_index + 1, text_index) or (
+                text_index < len(text) and walk(pattern_index, text_index + 1)
+            )
+        if text_index == len(text):
+            return False
+        return (char == "?" or char == text[text_index]) and walk(
+            pattern_index + 1, text_index + 1
+        )
+
+    return walk(0, 0)
+
+
+@lru_cache(maxsize=4096)
+def _glob_match(pattern: str, path: str) -> bool:
+    pattern_parts = tuple(part for part in pattern.split("/") if part)
+    path_parts = tuple(part for part in path.split("/") if part)
+
+    @lru_cache(maxsize=None)
+    def walk(pattern_index: int, path_index: int) -> bool:
+        if pattern_index == len(pattern_parts):
+            return path_index == len(path_parts)
+        part = pattern_parts[pattern_index]
+        if part == "**":
+            return walk(pattern_index + 1, path_index) or (
+                path_index < len(path_parts) and walk(pattern_index, path_index + 1)
+            )
+        if path_index == len(path_parts):
+            return False
+        return _segment_match(part, path_parts[path_index]) and walk(
+            pattern_index + 1, path_index + 1
+        )
+
+    return walk(0, 0)
 
 
 def matches(path: str, patterns: tuple[str, ...] | list[str]) -> bool:
@@ -250,9 +269,9 @@ def matches(path: str, patterns: tuple[str, ...] | list[str]) -> bool:
         if not pattern:
             continue
         if "/" not in pattern:
-            if fnmatch.fnmatchcase(basename, pattern):
+            if _segment_match(pattern, basename):
                 return True
-        elif _compile_glob(pattern).match(posix):
+        elif _glob_match(pattern, posix):
             return True
     return False
 
@@ -282,8 +301,14 @@ def load_config(repo: Path, path: str | Path | None = None) -> Config:
             candidate = repo / candidate
     if not candidate.exists():
         return Config()
-
-    raw = tomllib.loads(candidate.read_text(encoding="utf-8"))
+    if candidate.is_symlink():
+        raise ConfigError(f"configuration must not be a symlink: {path or 'aed.toml'}")
+    try:
+        if candidate.stat().st_size > 1024 * 1024:
+            raise ConfigError("configuration exceeds 1 MiB")
+        raw = tomllib.loads(candidate.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
+        raise ConfigError(f"could not read {path or 'aed.toml'}: {exc}") from exc
     aed: dict[str, Any] = raw.get("aed", {})
     thresholds: dict[str, Any] = raw.get("thresholds", {})
 

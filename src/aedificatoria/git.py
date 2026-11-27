@@ -18,6 +18,7 @@ except ImportError:  # pragma: no cover - non-POSIX fallback
 
 from .config import Config
 from .model import ChangedFile
+from .paths import MAX_SOURCE_BYTES
 
 
 class GitError(RuntimeError):
@@ -190,22 +191,39 @@ def _numstat(repo: Path, base: str, *, staged: bool = False) -> dict[str, tuple[
     args = ["diff"]
     if staged:
         args.append("--cached")
-    args.extend(["--numstat", base, "--"])
+    args.extend(["--numstat", "-z", base, "--"])
     proc = _git(repo, *args, keep_index=staged)
+    tokens = proc.stdout.split(b"\0")
     stats: dict[str, tuple[int, int, bool]] = {}
-    for line in proc.stdout.decode("utf-8", "replace").splitlines():
-        parts = line.split("\t")
-        if len(parts) < 3:
+    index = 0
+    while index < len(tokens):
+        raw = tokens[index]
+        index += 1
+        if not raw:
             continue
-        added_raw, deleted_raw, path = parts[0], parts[1], parts[2]
-        if " => " in path:
-            path = path.split(" => ", 1)[1].strip()
-            if path.startswith("{") and path.endswith("}"):
-                path = path.strip("{}")
-        binary = added_raw == "-" or deleted_raw == "-"
-        added = 0 if added_raw == "-" else int(added_raw)
-        deleted = 0 if deleted_raw == "-" else int(deleted_raw)
-        stats[path] = (added, deleted, binary)
+        parts = raw.split(b"\t", 2)
+        if len(parts) != 3:
+            continue
+        added_raw, deleted_raw, path_raw = parts
+        old_path: str | None = None
+        if not path_raw:
+            if index + 1 >= len(tokens):
+                break
+            old_path = os.fsdecode(tokens[index])
+            path = os.fsdecode(tokens[index + 1])
+            index += 2
+        else:
+            path = os.fsdecode(path_raw)
+        binary = added_raw == b"-" or deleted_raw == b"-"
+        try:
+            added = 0 if binary else int(added_raw)
+            deleted = 0 if binary else int(deleted_raw)
+        except ValueError:
+            continue
+        value = (added, deleted, binary)
+        stats[path] = value
+        if old_path is not None:
+            stats[old_path] = value
     return stats
 
 
@@ -217,7 +235,13 @@ def _untracked(repo: Path) -> list[ChangedFile]:
             continue
         rel = os.fsdecode(raw)
         path = repo / rel
+        if path.is_symlink():
+            continue
         try:
+            size = path.stat().st_size
+            if size > MAX_SOURCE_BYTES:
+                out.append(ChangedFile(status="A", path=rel, binary=True))
+                continue
             data = path.read_bytes()
         except OSError:
             continue
@@ -347,8 +371,20 @@ def _worktree_lock(repo: Path) -> Generator[None, None, None]:
         yield
         return
     digest = hashlib.sha1(str(repo.resolve()).encode("utf-8")).hexdigest()[:16]
-    lock_path = Path(tempfile.gettempdir()) / f"aed-worktree-{digest}.lock"
-    with lock_path.open("a") as handle:
+    uid = getattr(os, "getuid", lambda: "user")()
+    lock_dir = Path(tempfile.gettempdir()) / f"aed-locks-{uid}"
+    lock_dir.mkdir(mode=0o700, exist_ok=True)
+    try:
+        os.chmod(lock_dir, 0o700)
+    except OSError:
+        pass
+    lock_path = lock_dir / f"worktree-{digest}.lock"
+    flags = os.O_CREAT | os.O_RDWR | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(lock_path, flags, 0o600)
+    except OSError as exc:
+        raise GitError(f"could not open worktree lock: {exc}") from exc
+    with os.fdopen(descriptor, "a") as handle:
         fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
         try:
             yield
@@ -462,24 +498,64 @@ _SKIP_DIRS = {
 }
 
 
+def _source_file(root: Path, rel: str, config: Config, extensions: tuple[str, ...]) -> bool:
+    if not rel.endswith(extensions) or config.is_excluded(rel):
+        return False
+    if any(part in _SKIP_DIRS for part in Path(rel).parts[:-1]):
+        return False
+    full = root / rel
+    if full.is_symlink() or not full.is_file():
+        return False
+    try:
+        return full.stat().st_size <= MAX_SOURCE_BYTES
+    except OSError:
+        return False
+
+
+def _tracked_git_files(root: Path) -> list[str] | None:
+    proc = _git(
+        root,
+        "ls-files",
+        "--cached",
+        "--others",
+        "--exclude-standard",
+        "-z",
+        check=False,
+    )
+    if proc.returncode != 0:
+        return None
+    return sorted(
+        {
+            os.fsdecode(raw)
+            for raw in proc.stdout.split(b"\0")
+            if raw and not os.fsdecode(raw).endswith("/")
+        }
+    )
+
+
+def tracked_files(root: Path) -> list[str]:
+    """List files, honoring Git ignores/submodules when Git metadata exists."""
+    paths = _tracked_git_files(root)
+    if paths is None:
+        paths = []
+        for dirpath, dirnames, filenames in os.walk(root):
+            dirnames[:] = [name for name in dirnames if name not in _SKIP_DIRS]
+            for name in filenames:
+                full = Path(dirpath) / name
+                if full.is_symlink():
+                    continue
+                try:
+                    paths.append(full.relative_to(root).as_posix())
+                except ValueError:
+                    continue
+    return sorted(rel for rel in paths if (root / rel).is_file())
+
+
 def tracked_source_files(root: Path, config: Config, extensions: tuple[str, ...]) -> list[str]:
-    """List repository-relative source files with the given extensions."""
-    out: list[str] = []
-    for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = [name for name in dirnames if name not in _SKIP_DIRS]
-        for name in filenames:
-            if not name.endswith(extensions):
-                continue
-            full = Path(dirpath) / name
-            try:
-                rel = full.relative_to(root).as_posix()
-            except ValueError:
-                continue
-            if config.is_excluded(rel):
-                continue
-            out.append(rel)
-    out.sort()
-    return out
+    """List source files, honoring Git ignores/submodules when possible."""
+    return sorted(
+        rel for rel in tracked_files(root) if _source_file(root, rel, config, extensions)
+    )
 
 
 def tracked_python_files(root: Path, config: Config) -> list[str]:

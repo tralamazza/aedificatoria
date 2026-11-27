@@ -18,7 +18,9 @@ import tree_sitter_rust
 from tree_sitter import Language, Node, Parser, Tree
 
 from .config import Config
+from .git import tracked_files
 from .model import ImportRef, TestInfo
+from .paths import ConfinedPathError, MAX_SOURCE_BYTES, read_text
 from .syntax import tree_sitter_error
 
 NAME = "rust"
@@ -502,8 +504,8 @@ def is_stdlib(module: str) -> bool:
 
 def _read_manifest(root: Path, rel: str) -> tuple[str, dict[str, tuple[str, int]]]:
     try:
-        text = (root / rel).read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
+        text = read_text(root, rel)
+    except (OSError, UnicodeDecodeError, ConfinedPathError):
         return "", {}
     try:
         data = tomllib.loads(text)
@@ -559,16 +561,20 @@ def _is_dependency_table(table: str) -> bool:
 def _repo_files(root: Path) -> tuple[list[str], list[str]]:
     manifests: list[str] = []
     sources: list[str] = []
-    for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = sorted(name for name in dirnames if name not in _SKIP_DIRS)
-        relative = os.path.relpath(dirpath, root)
-        relative = "" if relative == "." else Path(relative).as_posix()
-        for name in sorted(filenames):
-            rel = f"{relative}/{name}" if relative else name
-            if name == "Cargo.toml":
-                manifests.append(rel)
-            elif name.endswith(".rs"):
-                sources.append(rel)
+    for rel in tracked_files(root):
+        name = posixpath.basename(rel)
+        full = root / rel
+        if full.is_symlink():
+            continue
+        try:
+            if full.stat().st_size > MAX_SOURCE_BYTES:
+                continue
+        except OSError:
+            continue
+        if name == "Cargo.toml":
+            manifests.append(rel)
+        elif name.endswith(".rs"):
+            sources.append(rel)
     return manifests, sources
 
 
@@ -602,8 +608,8 @@ class RepoIndex:
                 self.deps.setdefault(dependency, site)
         for rel in sources:
             try:
-                text = (self.root / rel).read_text(encoding="utf-8")
-            except (OSError, UnicodeDecodeError):
+                text = read_text(self.root, rel)
+            except (OSError, UnicodeDecodeError, ConfinedPathError):
                 continue
             tree = parse_text(rel, text)
             if tree is None:

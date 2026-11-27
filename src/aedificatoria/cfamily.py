@@ -13,8 +13,9 @@ import tree_sitter_cpp
 from tree_sitter import Language, Node, Parser, Tree
 
 from .config import Config
-from .git import _SKIP_DIRS
+from .git import tracked_files
 from .model import TestInfo
+from .paths import ConfinedPathError, MAX_SOURCE_BYTES, read_text
 from .syntax import tree_sitter_error
 
 NAME = "c_cpp"
@@ -433,13 +434,15 @@ def _includes(tree: CFile) -> list[tuple[str, bool, int]]:
 
 def _files(root: Path) -> list[str]:
     found: list[str] = []
-    for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = sorted(name for name in dirnames if name not in _SKIP_DIRS)
-        relative = Path(dirpath).relative_to(root).as_posix()
-        relative = "" if relative == "." else relative
-        for name in sorted(filenames):
-            if name.endswith(EXTENSIONS):
-                found.append(f"{relative}/{name}" if relative else name)
+    for rel in tracked_files(root):
+        full = root / rel
+        if not rel.endswith(EXTENSIONS) or full.is_symlink():
+            continue
+        try:
+            if full.stat().st_size <= MAX_SOURCE_BYTES:
+                found.append(rel)
+        except OSError:
+            continue
     return found
 
 
@@ -478,7 +481,11 @@ def package_edges(root: Path, config: Config) -> tuple[set[tuple[str, str]], set
     packages = set(_local_components(root, config))
     edges: set[tuple[str, str]] = set()
     for rel in _files(root):
-        tree = parse_text(rel, (root / rel).read_text(encoding="utf-8", errors="replace"))
+        try:
+            text = read_text(root, rel, errors="replace")
+        except (OSError, UnicodeDecodeError, ConfinedPathError):
+            continue
+        tree = parse_text(rel, text)
         if tree is None:
             continue
         source = _component(rel, config)
@@ -500,7 +507,11 @@ def project_imports(root: Path, config: Config) -> dict[str, tuple[str, int]]:
     local = set(_local_components(root, config))
     found: dict[str, tuple[str, int]] = {}
     for rel in _files(root):
-        tree = parse_text(rel, (root / rel).read_text(encoding="utf-8", errors="replace"))
+        try:
+            text = read_text(root, rel, errors="replace")
+        except (OSError, UnicodeDecodeError, ConfinedPathError):
+            continue
+        tree = parse_text(rel, text)
         if tree is None:
             continue
         for include, system, line in _includes(tree):

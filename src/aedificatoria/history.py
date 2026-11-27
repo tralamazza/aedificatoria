@@ -31,6 +31,7 @@ from .git import (
 )
 from .model import SEVERITY_RANK, Finding
 from .pyast import strongly_connected
+from .report import safe_text
 
 _SQUASH_PR = re.compile(r"\(#(\d+)\)\s*$")
 
@@ -511,13 +512,13 @@ def render_text(points: list[HistoryPoint], header: str = "first-parent commits"
         for point in ranked:
             marker = f" [squash #{point.pr}]" if point.kind == "squash" else ""
             lines.append(
-                f"{point.commit[:8]} {point.subject}{marker} — "
+                f"{point.commit[:8]} {safe_text(point.subject)}{marker} — "
                 f"{point.files}f/{point.lines}l — {len(point.regressions)} regression(s), "
                 f"impact {point.impact}"
             )
             for item in point.regressions[:4]:
-                location = f" ({item.path})" if item.path else ""
-                lines.append(f"  [{item.severity}] {item.message}{location}")
+                location = f" ({safe_text(item.path)})" if item.path else ""
+                lines.append(f"  [{item.severity}] {safe_text(item.message)}{location}")
             if len(point.regressions) > 4:
                 lines.append(f"  ... +{len(point.regressions) - 4} more")
     return "\n".join(lines)

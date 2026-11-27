@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from .paths import MAX_SOURCE_BYTES
+
 if TYPE_CHECKING:
     from .config import Config
 
@@ -100,8 +102,10 @@ class Context:
         if candidate is None:
             return None
         try:
+            if candidate.stat().st_size > MAX_SOURCE_BYTES:
+                return None
             return candidate.read_text(encoding="utf-8")
-        except (FileNotFoundError, IsADirectoryError, UnicodeDecodeError):
+        except (OSError, UnicodeDecodeError):
             return None
 
     def head_text(self, path: str) -> str | None:
@@ -109,8 +113,10 @@ class Context:
         if candidate is None:
             return None
         try:
+            if candidate.stat().st_size > MAX_SOURCE_BYTES:
+                return None
             return candidate.read_text(encoding="utf-8")
-        except (FileNotFoundError, IsADirectoryError, UnicodeDecodeError):
+        except (OSError, UnicodeDecodeError):
             return None
 
     def head_exists(self, path: str) -> bool:

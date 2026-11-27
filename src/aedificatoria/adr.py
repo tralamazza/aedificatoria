@@ -7,6 +7,7 @@ import re
 from pathlib import Path
 
 from .config import Config
+from .paths import ConfinedPathError, confined
 
 CONFIG_TEMPLATE = """# Aedificatoria configuration.
 
@@ -128,10 +129,18 @@ def create_adr(
     config: Config | None = None,
 ) -> Path:
     cfg = config or Config()
-    directory = root / cfg.adr_dir
+    try:
+        directory = confined(root, cfg.adr_dir)
+    except ConfinedPathError as exc:
+        raise ValueError(f"invalid adr_dir: {exc}") from exc
+    raw = root / cfg.adr_dir
+    if raw.is_symlink():
+        raise ValueError(f"adr_dir must not be a symlink: {cfg.adr_dir}")
     directory.mkdir(parents=True, exist_ok=True)
     number = _next_number(directory)
     path = directory / f"{number:04d}-{slugify(title)}.md"
+    if path.is_symlink():
+        raise ValueError(f"ADR path must not be a symlink: {path.name}")
     date = _dt.date.today().isoformat()
     path.write_text(
         f"""# {number:04d}. {title}
@@ -174,16 +183,23 @@ def init_project(root: Path) -> tuple[list[Path], list[Path]]:
     created: list[Path] = []
     existing: list[Path] = []
 
-    config_path = root / "aed.toml"
+    try:
+        config_path = confined(root, "aed.toml")
+        adr_dir = confined(root, "docs/decisions")
+    except ConfinedPathError as exc:
+        raise ValueError(str(exc)) from exc
+    if (root / "aed.toml").is_symlink() or (root / "docs/decisions").is_symlink():
+        raise ValueError("init paths must not be symlinks")
     if config_path.exists():
         existing.append(config_path)
     else:
         config_path.write_text(CONFIG_TEMPLATE, encoding="utf-8")
         created.append(config_path)
 
-    adr_dir = root / "docs" / "decisions"
     adr_dir.mkdir(parents=True, exist_ok=True)
     first = adr_dir / "0001-record-architecture-decisions.md"
+    if first.is_symlink():
+        raise ValueError("first ADR path must not be a symlink")
     existing_adrs = sorted(adr_dir.glob("*.md"))
     if existing_adrs:
         existing.extend(existing_adrs[:1])

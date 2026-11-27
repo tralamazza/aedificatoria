@@ -2,9 +2,16 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from .model import ChangedFile, Finding
+
+_CONTROL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]")
+
+
+def safe_text(value: str) -> str:
+    return _CONTROL.sub(lambda match: f"\\x{ord(match.group(0)):02x}", value)
 
 
 def verdict(findings: list[Finding]) -> str:
@@ -54,13 +61,13 @@ def render_text(findings: list[Finding], base_commit: str, changed: list[Changed
         return "\n".join(lines)
 
     for item in findings:
-        location = item.path or "repository"
+        location = safe_text(item.path) if item.path else "repository"
         if item.line is not None:
             location += f":{item.line}"
         lines.append(f"[{item.severity.upper()}] {item.rule}  {location}")
-        lines.append(f"        {item.message}")
+        lines.append(f"        {safe_text(item.message)}")
         if item.evidence:
-            lines.append(f"        evidence: {item.evidence}")
+            lines.append(f"        evidence: {safe_text(item.evidence)}")
     summary = counts(findings)
     lines.append("")
     lines.append(

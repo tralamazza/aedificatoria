@@ -1,0 +1,6 @@
+# Verifier and release trust boundary.
+/aed.toml @tralamazza
+/aed-baseline.json @tralamazza
+/docs/decisions/ @tralamazza
+/.githooks/ @tralamazza
+/.github/workflows/ @tralamazza

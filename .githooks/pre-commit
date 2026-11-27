@@ -11,13 +11,18 @@ set -eu
 root=$(git rev-parse --show-toplevel)
 cd "$root"
 
-if [ -x "$root/.venv/bin/aed" ]; then
-    exec "$root/.venv/bin/aed" check --staged
+if [ -n "${AED_BIN:-}" ] && [ -x "$AED_BIN" ]; then
+    exec "$AED_BIN" check --staged
 fi
 
 if command -v aed >/dev/null 2>&1; then
     exec aed check --staged
 fi
 
-echo "aed: not on PATH and no .venv; skipping architecture check" >&2
+if [ -x "$root/.venv/bin/aed" ]; then
+    echo "aed: using workspace .venv; set AED_BIN to a pinned outside-workspace binary" >&2
+    exec "$root/.venv/bin/aed" check --staged
+fi
+
+echo "aed: not on PATH, AED_BIN unset, and no .venv; skipping architecture check" >&2
 exit 0

@@ -20,7 +20,9 @@ import tree_sitter_typescript
 from tree_sitter import Language, Node, Parser, Tree
 
 from .config import Config
+from .git import tracked_files
 from .model import ImportRef, TestInfo
+from .paths import ConfinedPathError, MAX_SOURCE_BYTES, read_text
 from .syntax import tree_sitter_error
 
 NAME = "javascript"
@@ -756,26 +758,30 @@ def _repo_files(root: Path) -> tuple[list[str], list[str], list[str]]:
     manifests: list[str] = []
     sources: list[str] = []
     configs: list[str] = []
-    for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = sorted(name for name in dirnames if name not in _SKIP_DIRS)
-        relative = os.path.relpath(dirpath, root)
-        relative = "" if relative == "." else Path(relative).as_posix()
-        for name in sorted(filenames):
-            rel = f"{relative}/{name}" if relative else name
-            if name == "package.json":
-                manifests.append(rel)
-            elif name in {"tsconfig.json", "jsconfig.json"}:
-                configs.append(rel)
-            elif name.endswith(EXTENSIONS):
-                sources.append(rel)
+    for rel in tracked_files(root):
+        name = posixpath.basename(rel)
+        full = root / rel
+        if full.is_symlink():
+            continue
+        try:
+            if full.stat().st_size > MAX_SOURCE_BYTES:
+                continue
+        except OSError:
+            continue
+        if name == "package.json":
+            manifests.append(rel)
+        elif name in {"tsconfig.json", "jsconfig.json"}:
+            configs.append(rel)
+        elif name.endswith(EXTENSIONS):
+            sources.append(rel)
     return manifests, sources, configs
 
 
 def _read_package(root: Path, rel: str) -> tuple[str, dict[str, tuple[str, int]]] | None:
     try:
-        text = (root / rel).read_text(encoding="utf-8")
+        text = read_text(root, rel)
         data = json.loads(text)
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+    except (OSError, UnicodeDecodeError, ConfinedPathError, json.JSONDecodeError):
         return None
     if not isinstance(data, dict):
         return None
@@ -873,10 +879,10 @@ def _strip_jsonc(text: str) -> str:
     return _strip_trailing_commas(_strip_comments(text))
 
 
-def _load_jsonc(path: Path) -> dict[str, object] | None:
+def _load_jsonc(root: Path, rel: str) -> dict[str, object] | None:
     try:
-        data = json.loads(_strip_jsonc(path.read_text(encoding="utf-8")))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        data = json.loads(_strip_jsonc(read_text(root, rel)))
+    except (OSError, UnicodeDecodeError, ConfinedPathError, json.JSONDecodeError):
         return None
     return data if isinstance(data, dict) else None
 
@@ -939,7 +945,7 @@ def _read_tsconfig(root: Path, rel: str, seen: set[str] | None = None) -> _TsCon
     if rel in seen:
         return None
     seen.add(rel)
-    data = _load_jsonc(root / rel)
+    data = _load_jsonc(root, rel)
     if data is None:
         return None
 
@@ -995,8 +1001,8 @@ class RepoIndex:
         self.files = {}
         for rel in sources:
             try:
-                text = (self.root / rel).read_text(encoding="utf-8")
-            except (OSError, UnicodeDecodeError):
+                text = read_text(self.root, rel)
+            except (OSError, UnicodeDecodeError, ConfinedPathError):
                 continue
             tree = parse_text(rel, text)
             if tree is not None:
@@ -1006,8 +1012,8 @@ class RepoIndex:
         if any(part in _SKIP_DIRS for part in rel.split("/")[:-1]):
             return
         try:
-            text = (self.root / rel).read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
+            text = read_text(self.root, rel)
+        except (OSError, UnicodeDecodeError, ConfinedPathError):
             self.files.pop(rel, None)
             return
         tree = parse_text(rel, text)
@@ -1034,7 +1040,7 @@ class RepoIndex:
                     continue
                 name = posixpath.basename(path)
                 manifests_changed = manifests_changed or name == "package.json"
-                configs_changed = configs_changed or name in {"tsconfig.json", "jsconfig.json"}
+                configs_changed = configs_changed or name.startswith(("tsconfig", "jsconfig"))
         if manifests_changed or configs_changed:
             manifests, _sources, configs = _repo_files(self.root)
             if manifests_changed:

@@ -9,7 +9,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from . import baseline, cargo, languages
-from .config import Config, load_config
+from .config import Config, ConfigError, load_config
 from .model import SEVERITY_RANK, ChangedFile, Context, Finding, TestInfo
 from .pyast import (
     cycle_evidence,
@@ -51,7 +51,7 @@ def _adr_valid(ctx: Context, item: ChangedFile) -> tuple[bool, str]:
     has_title = any(line.startswith("# ") for line in lines)
     status = _adr_status(text)
     has_decision = re.search(r"(?mi)^##\s+Decision\b", text) is not None
-    valid = has_title and status in {"accepted", "proposed"} and has_decision
+    valid = has_title and status == "accepted" and has_decision
     return valid, status
 
 
@@ -116,54 +116,77 @@ def check_change_amplification(ctx: Context) -> list[Finding]:
     return [Finding("change-amplification", "error", message, evidence=evidence)]
 
 
-def check_one_way_doors(ctx: Context) -> list[Finding]:
-    doors = [item for item in _relevant(ctx) if ctx.config.is_one_way_door(item.path)]
-    if not doors:
-        return []
+def _door_candidates(ctx: Context) -> list[ChangedFile]:
+    candidates: list[ChangedFile] = []
+    for item in ctx.changed:
+        new_visible = not ctx.config.is_excluded(item.path)
+        old_visible = (
+            item.is_renamed
+            and item.base_path != item.path
+            and not ctx.config.is_excluded(item.base_path)
+        )
+        if not new_visible and not old_visible:
+            continue
+        if ctx.config.is_one_way_door(item.path) or ctx.config.is_one_way_door(item.base_path):
+            candidates.append(item)
+    return candidates
 
-    adrs = _adr_changes(ctx)
-    valid = [(item, _adr_valid(ctx, item)[1]) for item in adrs if _adr_valid(ctx, item)[0]]
+
+def _door_listing(doors: list[ChangedFile]) -> str:
     listing = ", ".join(item.path for item in doors[:5])
     if len(doors) > 5:
         listing += f", +{len(doors) - 5} more"
+    return listing
 
-    if not valid:
+
+def _accepted_adrs(ctx: Context) -> list[ChangedFile]:
+    return [item for item in _adr_changes(ctx) if _adr_valid(ctx, item)[0]]
+
+
+def _proposed_adrs(ctx: Context) -> list[str]:
+    return [
+        item.path
+        for item in _adr_changes(ctx)
+        if _adr_status(ctx.head_text(item.path) or "") == "proposed"
+    ]
+
+
+def check_one_way_doors(ctx: Context) -> list[Finding]:
+    doors = _door_candidates(ctx)
+    if not doors:
+        return []
+    listing = _door_listing(doors)
+    accepted = _accepted_adrs(ctx)
+    if accepted:
         return [
             Finding(
                 "one-way-door",
-                "error",
-                f"one-way-door change without an architecture decision record: {listing}",
+                "info",
+                f"one-way-door change recorded by ADR: {accepted[0].path}",
                 path=doors[0].path,
-                evidence=(
-                    f"Add a file under {ctx.config.adr_dir}/ with a title, "
-                    "`- Status: accepted`, and a `## Decision` section."
-                ),
+                evidence=listing,
             )
         ]
-
-    findings: list[Finding] = []
-    proposed = [item.path for item, status in valid if status == "proposed"]
+    proposed = _proposed_adrs(ctx)
     if proposed:
-        findings.append(
-            Finding(
-                "one-way-door",
-                "warn",
-                f"one-way-door change recorded by a proposed ADR: {', '.join(proposed[:3])}",
-                path=doors[0].path,
-                evidence=listing,
-            )
+        evidence = (
+            f"Proposed ADR(s) do not authorize the change: {', '.join(proposed[:3])}. "
+            "Accept the ADR through the human review gate."
         )
     else:
-        findings.append(
-            Finding(
-                "one-way-door",
-                "info",
-                f"one-way-door change recorded by ADR: {valid[0][0].path}",
-                path=doors[0].path,
-                evidence=listing,
-            )
+        evidence = (
+            f"Add a file under {ctx.config.adr_dir}/ with a title, "
+            "`- Status: accepted`, and a `## Decision` section."
         )
-    return findings
+    return [
+        Finding(
+            "one-way-door",
+            "error",
+            f"one-way-door change without an accepted architecture decision record: {listing}",
+            path=doors[0].path,
+            evidence=evidence,
+        )
+    ]
 
 
 def _test_config_finding(ctx: Context, item: ChangedFile) -> Finding | None:
@@ -334,8 +357,30 @@ def _config_policy(config: Config) -> dict[str, object]:
 
 
 def check_guard_config(ctx: Context) -> list[Finding]:
-    base_policy = _config_policy(load_config(ctx.base_dir, ctx.config_path))
-    head_policy = _config_policy(load_config(ctx.repo, ctx.config_path))
+    try:
+        base_config = load_config(ctx.base_dir, ctx.config_path)
+    except ConfigError as exc:
+        return [
+            Finding(
+                "guard-config",
+                "error",
+                f"base configuration is unreadable: {exc}",
+                path=ctx.config_path,
+            )
+        ]
+    base_policy = _config_policy(base_config)
+    try:
+        head_config = load_config(ctx.repo, ctx.config_path)
+    except ConfigError as exc:
+        return [
+            Finding(
+                "guard-config",
+                "error",
+                f"configuration is unreadable: {exc}",
+                path=ctx.config_path,
+            )
+        ]
+    head_policy = _config_policy(head_config)
     changed = sorted(name for name in base_policy if base_policy[name] != head_policy.get(name))
     baseline_path = str(head_policy.get("baseline_path", ""))
     if baseline_path and not Path(baseline_path).is_absolute():

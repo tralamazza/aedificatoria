@@ -73,6 +73,7 @@
       "Config.is_test": "(self,path:str)->bool",
       "Config.is_test_config": "(self,path:str)->bool",
       "Config.package_of": "(self,path:str)->str",
+      "ConfigError": "class(ValueError)",
       "ForbiddenEdge": "class()",
       "load_config": "(repo:Path,path:str|Path|None=None)->Config",
       "matches": "(path:str,patterns:tuple[str,...]|list[str])->bool"
@@ -107,6 +108,7 @@
       "remote_url": "(repo:Path,name:str='origin')->str",
       "repo_root": "(path:Path)->Path",
       "resolve_commit": "(repo:Path,ref:str)->str",
+      "tracked_files": "(root:Path)->list[str]",
       "tracked_python_files": "(root:Path,config:Config)->list[str]",
       "tracked_source_files": "(root:Path,config:Config,extensions:tuple[str,...])->list[str]"
     },
@@ -187,6 +189,12 @@
       "SEVERITY_RANK": "const",
       "TestInfo": "class()"
     },
+    "src/aedificatoria/paths.py": {
+      "ConfinedPathError": "class(ValueError)",
+      "MAX_SOURCE_BYTES": "const",
+      "confined": "(root:Path,relative:str|Path)->Path",
+      "read_text": "(root:Path,relative:str|Path,*,max_bytes:int=MAX_SOURCE_BYTES,errors:str='strict')->str"
+    },
     "src/aedificatoria/pyast.py": {
       "EXTENSIONS": "const",
       "NAME": "const",
@@ -210,6 +218,7 @@
       "exit_code": "(findings:list[Finding])->int",
       "json_payload": "(findings:list[Finding],base_commit:str,changed:list[ChangedFile])->dict[str,Any]",
       "render_text": "(findings:list[Finding],base_commit:str,changed:list[ChangedFile])->str",
+      "safe_text": "(value:str)->str",
       "verdict": "(findings:list[Finding])->str"
     },
     "src/aedificatoria/rust.py": {
@@ -239,13 +248,14 @@
   "complexity": {
     "src/aedificatoria/adr.py": {
       "_next_number": 3,
-      "create_adr": 2,
-      "init_project": 3,
+      "create_adr": 5,
+      "init_project": 7,
       "slugify": 2
     },
     "src/aedificatoria/baseline.py": {
       "_api_findings": 10,
       "_api_symbols": 5,
+      "_baseline_path": 3,
       "_collect_file": 15,
       "_complexity_findings": 7,
       "_copy_data": 7,
@@ -257,14 +267,15 @@
       "_finish": 4,
       "_mapping": 2,
       "_nested_total": 4,
+      "_refresh_initializers": 3,
       "_source_files": 1,
       "_test_case_findings": 7,
       "_test_findings": 7,
       "collect": 2,
       "compare": 1,
       "load": 6,
-      "update": 4,
-      "write": 2
+      "update": 8,
+      "write": 4
     },
     "src/aedificatoria/cargo.py": {
       "_facts": 14,
@@ -286,7 +297,7 @@
       "_declarations_one": 6,
       "_error_count": 3,
       "_field": 2,
-      "_files": 8,
+      "_files": 6,
       "_first_string": 4,
       "_function_signature": 1,
       "_gtest_title": 5,
@@ -307,14 +318,15 @@
       "declared_dependencies": 1,
       "is_stdlib": 1,
       "local_packages": 1,
-      "package_edges": 9,
+      "package_edges": 10,
       "parse_text": 9,
-      "project_imports": 7,
+      "project_imports": 8,
       "public_api": 3,
       "syntax_error": 3,
       "test_info": 2
     },
     "src/aedificatoria/checks.py": {
+      "_accepted_adrs": 3,
       "_adr_changes": 8,
       "_adr_status": 2,
       "_adr_valid": 5,
@@ -328,8 +340,11 @@
       "_complexity_findings": 9,
       "_config_policy": 3,
       "_deleted_test_findings": 4,
+      "_door_candidates": 8,
+      "_door_listing": 3,
       "_file_api_finding": 10,
       "_package_api_findings": 12,
+      "_proposed_adrs": 4,
       "_relevant": 3,
       "_test_config_finding": 11,
       "_top_dirs": 4,
@@ -339,10 +354,10 @@
       "check_cargo_advisory": 4,
       "check_change_amplification": 10,
       "check_complexity": 8,
-      "check_guard_config": 11,
+      "check_guard_config": 13,
       "check_import_graph": 5,
       "check_new_dependencies": 7,
-      "check_one_way_doors": 12,
+      "check_one_way_doors": 4,
       "check_public_api": 5,
       "check_syntax_errors": 8,
       "check_test_tampering": 14,
@@ -355,13 +370,13 @@
       "_run_check": 1,
       "build_parser": 1,
       "cmd_adr_new": 1,
-      "cmd_baseline": 3,
+      "cmd_baseline": 4,
       "cmd_check": 6,
       "cmd_doctor": 3,
       "cmd_history": 8,
       "cmd_init": 3,
       "cmd_rules": 7,
-      "main": 14
+      "main": 16
     },
     "src/aedificatoria/config.py": {
       "Config.is_adr": 3,
@@ -376,8 +391,11 @@
       "_as_bool": 2,
       "_as_int": 2,
       "_as_tuple": 4,
-      "_compile_glob": 6,
-      "load_config": 8,
+      "_glob_match": 5,
+      "_glob_match.walk": 7,
+      "_segment_match": 1,
+      "_segment_match.walk": 8,
+      "load_config": 13,
       "matches": 7
     },
     "src/aedificatoria/doctor.py": {
@@ -395,15 +413,17 @@
     },
     "src/aedificatoria/forge.py": {
       "_safe_members": 6,
-      "extract_tarball": 3
+      "extract_tarball": 4
     },
     "src/aedificatoria/git.py": {
       "_checkout_tree": 3,
       "_clean_env": 4,
       "_git": 5,
-      "_numstat": 10,
-      "_untracked": 7,
-      "_worktree_lock": 2,
+      "_numstat": 12,
+      "_source_file": 8,
+      "_tracked_git_files": 5,
+      "_untracked": 9,
+      "_worktree_lock": 4,
       "_worktree_tree": 3,
       "base_worktree": 5,
       "changed_files": 12,
@@ -418,8 +438,9 @@
       "remote_url": 2,
       "repo_root": 3,
       "resolve_commit": 1,
+      "tracked_files": 10,
       "tracked_python_files": 1,
-      "tracked_source_files": 8
+      "tracked_source_files": 3
     },
     "src/aedificatoria/github.py": {
       "GitHubClient.__init__": 1,
@@ -530,7 +551,7 @@
       "_read_package": 8,
       "_read_tsconfig": 9,
       "_record": 3,
-      "_repo_files": 10,
+      "_repo_files": 8,
       "_signature": 5,
       "_string_value": 4,
       "_strip_comments": 11,
@@ -572,10 +593,14 @@
       "ChangedFile.is_deleted": 1,
       "ChangedFile.is_renamed": 1,
       "Context._safe_join": 2,
-      "Context.base_text": 3,
+      "Context.base_text": 4,
       "Context.head_exists": 2,
-      "Context.head_text": 3,
+      "Context.head_text": 4,
       "Finding.as_dict": 4
+    },
+    "src/aedificatoria/paths.py": {
+      "confined": 5,
+      "read_text": 4
     },
     "src/aedificatoria/pyast.py": {
       "_ComplexityVisitor.__init__": 1,
@@ -618,6 +643,7 @@
       "_target_names": 4,
       "_target_surface": 6,
       "_walk_assertions": 6,
+      "_without_bom": 1,
       "cycle_evidence": 6,
       "declared_all": 9,
       "declared_dependencies": 1,
@@ -639,6 +665,7 @@
       "exit_code": 2,
       "json_payload": 4,
       "render_text": 8,
+      "safe_text": 1,
       "verdict": 5
     },
     "src/aedificatoria/rust.py": {
@@ -667,7 +694,7 @@
       "_parameter_signature": 7,
       "_read_manifest": 10,
       "_record_function": 3,
-      "_repo_files": 9,
+      "_repo_files": 7,
       "_signature": 3,
       "_strip_attr": 3,
       "_struct_api": 8,
@@ -733,7 +760,9 @@
       "test_baseline_malformed_is_error": 1,
       "test_baseline_missing_is_info": 2,
       "test_baseline_resolves_private_reexport": 1,
+      "test_baseline_write_rejects_escape_and_symlink": 4,
       "test_file_fact_cache_is_content_keyed": 2,
+      "test_incremental_refreshes_package_initializers": 2,
       "test_incremental_update_matches_full_collect": 1,
       "test_index_cache_cleared_between_collects": 2
     },
@@ -751,23 +780,28 @@
     "tests/test_checks.py": {
       "test_adr_quality_and_test_config": 2,
       "test_assertion_movement_between_tests_is_blocked": 2,
+      "test_bom_python_is_valid": 2,
       "test_change_amplification_and_adr_justification": 3,
       "test_check_ignores_hook_git_environment": 1,
       "test_complexity_existing_over_limit_unchanged_is_not_flagged": 1,
       "test_complexity_ratchet": 1,
+      "test_gitignored_sources_are_not_scanned": 2,
       "test_glob_matching": 8,
       "test_guard_config_allowlist_bypass_requires_adr": 2,
       "test_guard_config_change_requires_adr": 3,
       "test_import_cycle_and_forbidden_edge": 2,
       "test_load_config_thresholds": 4,
       "test_new_dependency_allowlist": 2,
+      "test_one_way_door_rename_is_caught": 1,
       "test_one_way_door_requires_adr": 2,
       "test_parse_text_suppresses_syntax_warnings": 2,
+      "test_proposed_adr_does_not_authorize_one_way_door": 1,
       "test_public_api_break_requires_adr": 2,
       "test_public_api_resolves_private_reexport": 1,
       "test_pyproject_non_pytest_change_does_not_warn": 1,
       "test_pyproject_pytest_config_warns": 1,
       "test_python_init_reexports_resolve": 1,
+      "test_rename_numstat_keeps_churn": 1,
       "test_report_has_stable_rules": 1,
       "test_syntax_error_ignores_empty_python_file": 2,
       "test_syntax_error_ignores_pre_existing_failure": 1,
@@ -777,18 +811,23 @@
       "test_syntax_error_on_new_rust_failure": 1,
       "test_syntax_error_on_new_typescript_failure": 1,
       "test_test_assertion_removal": 1,
-      "test_test_removal_and_skip": 2
+      "test_test_removal_and_skip": 2,
+      "test_tracked_source_files_skips_symlink": 1
     },
     "tests/test_cli.py": {
+      "test_adr_rejects_escaping_paths": 2,
+      "test_cli_adr_cannot_self_accept": 1,
       "test_cli_check_allows_clean_tree": 3,
       "test_cli_check_json_blocks_one_way_door": 3,
       "test_cli_doctor_json": 5,
       "test_cli_doctor_reports_missing_required": 3,
       "test_cli_init_and_adr": 7,
+      "test_cli_malformed_config_returns_two": 3,
       "test_cli_staged_checks_index_not_worktree": 4,
       "test_cli_staged_checks_staged_config": 3,
       "test_cli_staged_honors_hook_index": 2,
-      "test_doctor_optional_missing_is_not_a_failure": 2
+      "test_doctor_optional_missing_is_not_a_failure": 2,
+      "test_report_escapes_terminal_controls": 1
     },
     "tests/test_github.py": {
       "test_evaluate_github_with_fake_client": 5,

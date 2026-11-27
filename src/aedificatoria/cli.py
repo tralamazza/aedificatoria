@@ -10,9 +10,10 @@ from pathlib import Path
 from . import __version__
 from . import doctor as doctor_tools
 from . import forge
-from .config import Config, load_config
+from .config import Config, ConfigError, load_config
 from .git import GitError, base_worktree, changed_files, index_tree, repo_root, resolve_commit
 from .model import ChangedFile, Context
+from .paths import ConfinedPathError
 from .report import exit_code, json_payload, render_text
 
 
@@ -89,7 +90,7 @@ def build_parser() -> argparse.ArgumentParser:
     new.add_argument(
         "--status",
         default="proposed",
-        choices=("proposed", "accepted", "rejected", "superseded"),
+        choices=("proposed", "rejected", "superseded"),
     )
 
     rules = sub.add_parser("rules", help="Show the active rules and thresholds")
@@ -158,8 +159,12 @@ def cmd_baseline(args: argparse.Namespace) -> int:
     if not config.baseline_path:
         print("aed: baseline_path is empty; baseline is disabled", file=sys.stderr)
         return 2
-    data = baseline_store.collect(root, config)
-    path = baseline_store.write(root, config.baseline_path, data)
+    try:
+        data = baseline_store.collect(root, config)
+        path = baseline_store.write(root, config.baseline_path, data)
+    except baseline_store.BaselineError as exc:
+        print(f"aed: {exc}", file=sys.stderr)
+        return 2
     print(path.relative_to(root) if path.is_relative_to(root) else path)
     return 0
 
@@ -334,6 +339,12 @@ def main(argv: list[str] | None = None) -> int:
         print(f"aed: {exc}", file=sys.stderr)
         if "unknown revision" in str(exc).lower() or "needed a single revision" in str(exc).lower():
             print("aed: commit a baseline first, then re-run `aed check`", file=sys.stderr)
+        return 2
+    except (ConfigError, ConfinedPathError, ValueError) as exc:
+        print(f"aed: {exc}", file=sys.stderr)
+        return 2
+    except RecursionError:
+        print("aed: input nesting is too deep", file=sys.stderr)
         return 2
     except OSError as exc:
         print(f"aed: {exc}", file=sys.stderr)

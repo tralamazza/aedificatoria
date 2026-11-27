@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 import warnings
 from pathlib import Path
 
@@ -41,12 +42,92 @@ def test_glob_matching():
     assert matches("tests/test_thing.py", ("**/test_*.py",))
 
 
+def test_tracked_source_files_skips_symlink(repo: Path, commit, write, tmp_path: Path):
+    from aedificatoria.git import tracked_source_files
+
+    write(repo, "README.md", "base\n")
+    outside = tmp_path / "outside.py"
+    outside.write_text("def outside():\n    return 1\n", encoding="utf-8")
+    (repo / "src").mkdir()
+    (repo / "src" / "leak.py").symlink_to(outside)
+    commit(repo)
+
+    files = tracked_source_files(repo, Config(), (".py",))
+    assert "src/leak.py" not in files
+
+
+def test_rename_numstat_keeps_churn(repo: Path, commit, write):
+    write(repo, "src/old.py", "def f():\n    return 1\n")
+    commit(repo)
+    (repo / "src" / "lib").mkdir()
+    subprocess.run(
+        ["git", "-C", str(repo), "mv", "src/old.py", "src/lib/new.py"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    write(repo, "src/lib/new.py", "def f():\n    return 2\n")
+
+    changed = changed_files(repo, resolve_commit(repo, "HEAD"))
+    moved = next(item for item in changed if item.path == "src/lib/new.py")
+    assert moved.added + moved.deleted > 0
+
+
+def test_gitignored_sources_are_not_scanned(repo: Path, commit, write):
+    from aedificatoria.config import Config
+    from aedificatoria.git import tracked_source_files
+
+    write(repo, ".gitignore", ".tox/\n")
+    write(repo, "app.py", "import requests\n")
+    write(repo, ".tox/vendor.py", "import tox_only\n")
+    commit(repo)
+
+    files = tracked_source_files(repo, Config(), (".py",))
+    assert "app.py" in files
+    assert ".tox/vendor.py" not in files
+
+
 def test_parse_text_suppresses_syntax_warnings():
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         tree = pyast.parse_text("old.py", 'value = "\\s"\n')
     assert tree is not None
     assert not any(issubclass(item.category, SyntaxWarning) for item in caught)
+
+
+def test_bom_python_is_valid():
+    source = "\ufeffdef f(x: int) -> int:\n    return x\n"
+    assert pyast.parse_text("bom.py", source) is not None
+    assert pyast.syntax_error(source) is None
+
+
+def test_one_way_door_rename_is_caught(repo: Path, commit, write):
+    write(repo, "migrations/0001.sql", "create table t;\n")
+    commit(repo)
+    (repo / "archive").mkdir()
+    subprocess.run(
+        ["git", "-C", str(repo), "mv", "migrations/0001.sql", "archive/0001.sql"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    findings = evaluate(repo, Config())
+    assert any(item.rule == "one-way-door" and item.severity == "error" for item in findings)
+
+
+def test_proposed_adr_does_not_authorize_one_way_door(repo: Path, commit, write):
+    write(repo, "README.md", "base\n")
+    commit(repo)
+    write(repo, "migrations/0001.sql", "create table t;\n")
+    write(
+        repo,
+        "docs/decisions/0002-proposed.md",
+        "# 0002. Proposed\n\n- Status: proposed\n\n## Decision\n\nLater.\n",
+    )
+
+    findings = evaluate(repo, Config())
+    assert any(item.rule == "one-way-door" and item.severity == "error" for item in findings)
 
 
 def test_one_way_door_requires_adr(repo: Path, commit, write):

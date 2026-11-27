@@ -11,6 +11,7 @@ from pathlib import Path
 from .config import Config
 from .git import tracked_python_files
 from .model import ImportRef, TestInfo
+from .paths import ConfinedPathError, read_text
 
 NAME = "python"
 EXTENSIONS = (".py",)
@@ -20,13 +21,17 @@ def is_stdlib(module: str) -> bool:
     return module in sys.stdlib_module_names
 
 
+def _without_bom(text: str) -> str:
+    return text.removeprefix("\ufeff")
+
+
 def parse_text(_path: str, text: str | None) -> ast.Module | None:
     if text is None:
         return None
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", SyntaxWarning)
-            return ast.parse(text)
+            return ast.parse(_without_bom(text))
     except SyntaxError:
         return None
 
@@ -37,7 +42,7 @@ def syntax_error(text: str | None) -> tuple[int, str, str] | None:
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", SyntaxWarning)
-            ast.parse(text)
+            ast.parse(_without_bom(text))
     except SyntaxError as exc:
         return (exc.lineno or 1, exc.msg or "invalid syntax", (exc.text or "").strip())
     return None
@@ -200,8 +205,8 @@ def _target_surface(
     if target_rel is None:
         return None
     try:
-        text = (root / target_rel).read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
+        text = read_text(root, target_rel)
+    except (OSError, UnicodeDecodeError, ConfinedPathError):
         return None
     if Path(target_rel).name == "__init__.py":
         return _resolved_api(root, target_rel, config, seen)
@@ -268,8 +273,8 @@ def _resolved_api(
         return {}
     seen.add(rel)
     try:
-        text = (root / rel).read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
+        text = read_text(root, rel)
+    except (OSError, UnicodeDecodeError, ConfinedPathError):
         return {}
     tree = parse_text(rel, text)
     if tree is None:
@@ -292,8 +297,8 @@ def _resolved_public_api(root: Path, rel: str, config: Config) -> dict[str, str]
     """Resolve an `__init__.py` surface through local re-exports."""
     if Path(rel).name != "__init__.py":
         try:
-            tree = parse_text(rel, (root / rel).read_text(encoding="utf-8"))
-        except (OSError, UnicodeDecodeError):
+            tree = parse_text(rel, read_text(root, rel))
+        except (OSError, UnicodeDecodeError, ConfinedPathError):
             return {}
         return public_api(tree) if tree is not None else {}
     return _resolved_api(root, rel, config, set())
@@ -516,8 +521,8 @@ def project_imports(root: Path, config: Config) -> dict[str, tuple[str, int]]:
         if config.is_test(rel):
             continue
         try:
-            text = (root / rel).read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
+            text = read_text(root, rel)
+        except (OSError, UnicodeDecodeError, ConfinedPathError):
             continue
         tree = parse_text(rel, text)
         if tree is None:
@@ -549,8 +554,8 @@ def package_edges(root: Path, config: Config) -> tuple[set[tuple[str, str]], set
         if not package:
             continue
         try:
-            text = (root / rel).read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
+            text = read_text(root, rel)
+        except (OSError, UnicodeDecodeError, ConfinedPathError):
             continue
         tree = parse_text(rel, text)
         if tree is None:
