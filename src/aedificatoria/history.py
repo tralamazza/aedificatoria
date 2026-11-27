@@ -178,12 +178,22 @@ def _atomic_finding(
     commit: str,
     subject: str,
 ) -> list[Finding]:
-    if not parents or len(parents) > 1:
+    if not parents:
         return []
     over_files = config.max_changed_files > 0 and files > config.max_changed_files
     over_lines = config.max_changed_lines > 0 and lines > config.max_changed_lines
     if not (over_files or over_lines):
         return []
+    if len(parents) > 1:
+        return [
+            Finding(
+                "history",
+                "warn",
+                f"large merge: {files} files, {lines} changed lines; "
+                "branch commits remain in history (use --all)",
+                evidence=f"{commit[:12]} {subject}",
+            )
+        ]
     label = f"squash #{pr}" if kind == "squash" else "single commit"
     return [
         Finding(

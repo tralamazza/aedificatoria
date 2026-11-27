@@ -102,6 +102,37 @@ def test_history_head_ref(repo: Path, commit, write):
     assert [point.subject for point in points] == ["first", "second"]
 
 
+def test_history_flags_large_merge_as_recoverable(repo: Path, commit, write):
+    write(repo, "base.py", "value = 1\n")
+    commit(repo, "base")
+    branch = subprocess.check_output(
+        ["git", "-C", str(repo), "rev-parse", "--abbrev-ref", "HEAD"], text=True
+    ).strip()
+    subprocess.run(
+        ["git", "-C", str(repo), "checkout", "-q", "-b", "feature"], check=True
+    )
+    for index in range(3):
+        write(repo, f"feature_{index}.py", f"value = {index}\n")
+    commit(repo, "feature work")
+    subprocess.run(["git", "-C", str(repo), "checkout", "-q", branch], check=True)
+    write(repo, "main.py", "value = 2\n")
+    commit(repo, "main work")
+    subprocess.run(
+        ["git", "-C", str(repo), "merge", "-q", "--no-ff", "feature", "-m", "merge feature"],
+        check=True,
+    )
+
+    config = Config(max_changed_files=1, max_changed_lines=1)
+    points = history.evaluate(repo, config, limit=10)
+    merge = next(point for point in points if point.kind == "merge")
+    assert any("large merge" in item.message for item in merge.regressions)
+    assert any("branch commits remain" in item.message for item in merge.regressions)
+    assert not any("internal commits are unavailable" in item.message for item in merge.regressions)
+
+    all_points = history.evaluate(repo, config, limit=10, all_commits=True)
+    assert "feature work" in {point.subject for point in all_points}
+
+
 def test_history_marks_squash_and_flags_oversized_atomic(repo: Path, commit, write):
     write(repo, "README.md", "base\n")
     write(repo, "seed.py", "value = 0\n")

@@ -185,6 +185,11 @@ subject ends in `(#N)` is treated as a squashed merge. If a single-parent commit
 exceeds `max_changed_files` or `max_changed_lines`, history warns that it is a
 large atomic change and its internal commits are unavailable.
 
+A multi-parent merge is **not** atomic: its branch commits remain in history. A
+large merge net diff still produces a `large merge` warning and points to
+`--all`; use that (or the PR/MR history mode) when the merge internals matter.
+First-parent history otherwise sees only the merge's net diff.
+
 For squash-merge workflows, run history and the guard on the PR branch before
 merging:
 
