@@ -83,6 +83,12 @@ A credible result needs a held-out task set and enough tasks to make the
 difference meaningful. A perfect score on this mutation corpus alone is not
 evidence that the guard is useful in production.
 
+## Trial log
+
+See [`trial-2026-11-27.md`](trial-2026-11-27.md) for the four-task A/B pilot.
+It found behavioral policy differences but no hidden-test difference; it is not
+large enough for a usefulness claim.
+
 ## Real-world history
 
 The audit in [`docs/real-world-audit.md`](../../docs/real-world-audit.md) is a
