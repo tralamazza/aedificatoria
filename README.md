@@ -196,6 +196,11 @@ relative to **every** parent as `merge-only lines ... (potential conflict
 resolution)`. Same-file auto-merges that only combine parent lines are not
 flagged. This is a report signal, not proof that a conflict existed.
 
+Octopus merges use the same N-parent path: every parent branch is reachable with
+`--all`, the merge remains a net diff against its first parent, and the combined
+diff uses one prefix column per parent. Clean octopus merges produce no merge-only
+finding; manual octopus commits with conflict-resolution edits are inspected.
+
 For squash-merge workflows, run history and the guard on the PR branch before
 merging:
 
@@ -338,9 +343,11 @@ the change. Hidden tests should still live outside the agent's writable tree.
   adds side-branch commits but merge commits are still first-parent net diffs.
   Merge-only conflict-resolution lines are a heuristic from `git show --cc`;
   pure reorders, choosing one parent exactly, and some binary conflicts are not
-  detected. Squash merges are atomic: history detects PR-style squashes and flags
-  oversized ones, but the intermediate commits are unrecoverable. Check the PR
-  branch before squashing.
+  detected. Octopus merges are treated as N-parent merges: first parent is the
+  mainline net, `--all` walks every branch, and merge-only detection uses one
+  prefix column per parent. Squash merges are atomic: history detects PR-style
+  squashes and flags oversized ones, but the intermediate commits are
+  unrecoverable. Check the PR branch before squashing.
 - `--jobs` parallelizes local metric collection only; each worker holds a parser
   tree and a temporary worktree. Forge API modes remain sequential.
 - The GitHub/GitLab API fallbacks are opt-in and non-hermetic: they need

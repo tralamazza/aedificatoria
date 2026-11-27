@@ -7,6 +7,7 @@ from pathlib import Path
 from aedificatoria import history
 from aedificatoria.cli import main
 from aedificatoria.config import Config
+from aedificatoria.git import merge_edited_files
 
 
 def test_history_detects_complexity_regression(repo: Path, commit, write):
@@ -194,6 +195,71 @@ def test_history_auto_merge_does_not_flag_merge_only_lines(repo: Path, commit, w
     points = history.evaluate(repo, Config(), limit=10)
     merge = next(point for point in points if point.kind == "merge")
     assert not any("merge-only lines" in item.message for item in merge.regressions)
+
+
+def test_history_handles_octopus_merge(repo: Path, commit, write):
+    write(repo, "base.py", "value = 0\n")
+    commit(repo, "base")
+    branch = subprocess.check_output(
+        ["git", "-C", str(repo), "rev-parse", "--abbrev-ref", "HEAD"], text=True
+    ).strip()
+    heads = []
+    for name in ("one", "two", "three"):
+        subprocess.run(["git", "-C", str(repo), "checkout", "-q", branch], check=True)
+        subprocess.run(
+            ["git", "-C", str(repo), "checkout", "-q", "-b", name], check=True
+        )
+        write(repo, f"{name}.py", f"value = {name!r}\n")
+        commit(repo, name)
+        heads.append(name)
+    subprocess.run(["git", "-C", str(repo), "checkout", "-q", branch], check=True)
+    subprocess.run(
+        ["git", "-C", str(repo), "merge", "-q", "--no-ff", *heads, "-m", "octopus merge"],
+        check=True,
+    )
+
+    points = history.evaluate(repo, Config(), limit=10)
+    merge = next(point for point in points if point.kind == "merge")
+    assert merge.parents == 4
+    assert not any("merge-only lines" in item.message for item in merge.regressions)
+
+    all_points = history.evaluate(repo, Config(), limit=10, all_commits=True)
+    assert {"one", "two", "three"} <= {point.subject for point in all_points}
+
+
+def test_merge_edited_files_supports_octopus(repo: Path, commit, write):
+    write(repo, "base.py", "value = 0\n")
+    commit(repo, "base")
+    branch = subprocess.check_output(
+        ["git", "-C", str(repo), "rev-parse", "--abbrev-ref", "HEAD"], text=True
+    ).strip()
+    parents = [subprocess.check_output(["git", "-C", str(repo), "rev-parse", "HEAD"], text=True).strip()]
+    for name in ("one", "two", "three"):
+        subprocess.run(["git", "-C", str(repo), "checkout", "-q", branch], check=True)
+        subprocess.run(
+            ["git", "-C", str(repo), "checkout", "-q", "-b", name], check=True
+        )
+        write(repo, f"{name}.py", f"value = {name!r}\n")
+        commit(repo, name)
+        parents.append(
+            subprocess.check_output(["git", "-C", str(repo), "rev-parse", "HEAD"], text=True).strip()
+        )
+    subprocess.run(["git", "-C", str(repo), "checkout", "-q", branch], check=True)
+    write(repo, "one.py", "value = 'one'\n")
+    write(repo, "two.py", "value = 'two'\n")
+    write(repo, "three.py", "value = 'three'\n")
+    write(repo, "merge_only.py", "value = 'resolved'\n")
+    subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True)
+    tree = subprocess.check_output(
+        ["git", "-C", str(repo), "write-tree"], text=True
+    ).strip()
+    command = ["git", "-C", str(repo), "commit-tree", tree]
+    for parent in parents:
+        command.extend(["-p", parent])
+    command.extend(["-m", "octopus merge"])
+    merge = subprocess.check_output(command, text=True).strip()
+
+    assert merge_edited_files(repo, merge) == ["merge_only.py"]
 
 
 def test_history_marks_squash_and_flags_oversized_atomic(repo: Path, commit, write):

@@ -624,9 +624,11 @@
       "test_history_detects_new_dependency": 1,
       "test_history_flags_large_merge_as_recoverable": 4,
       "test_history_flags_merge_conflict_resolution": 4,
+      "test_history_handles_octopus_merge": 3,
       "test_history_head_ref": 1,
       "test_history_marks_squash_and_flags_oversized_atomic": 7,
-      "test_history_parallel_matches_sequential": 1
+      "test_history_parallel_matches_sequential": 1,
+      "test_merge_edited_files_supports_octopus": 1
     },
     "tests/test_jsts.py": {
       "test_ambient_declarations_are_api": 5,
