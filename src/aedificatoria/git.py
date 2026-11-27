@@ -21,19 +21,26 @@ class GitError(RuntimeError):
 _HOOK_GIT_ENV = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_PREFIX")
 
 
-def _clean_env() -> dict[str, str]:
+def _clean_env(*, keep_index: bool = False) -> dict[str, str]:
     env = os.environ.copy()
     for name in _HOOK_GIT_ENV:
+        if keep_index and name == "GIT_INDEX_FILE":
+            continue
         env.pop(name, None)
     return env
 
 
-def _git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[bytes]:
+def _git(
+    repo: Path,
+    *args: str,
+    check: bool = True,
+    keep_index: bool = False,
+) -> subprocess.CompletedProcess[bytes]:
     proc = subprocess.run(
         ["git", "-C", str(repo), *args],
         capture_output=True,
         check=False,
-        env=_clean_env(),
+        env=_clean_env(keep_index=keep_index),
     )
     if check and proc.returncode != 0:
         detail = proc.stderr.decode("utf-8", "replace").strip() or proc.stdout.decode("utf-8", "replace").strip()
@@ -178,7 +185,7 @@ def _numstat(repo: Path, base: str, *, staged: bool = False) -> dict[str, tuple[
     if staged:
         args.append("--cached")
     args.extend(["--numstat", base, "--"])
-    proc = _git(repo, *args)
+    proc = _git(repo, *args, keep_index=staged)
     stats: dict[str, tuple[int, int, bool]] = {}
     for line in proc.stdout.decode("utf-8", "replace").splitlines():
         parts = line.split("\t")
@@ -223,7 +230,7 @@ def changed_files(repo: Path, base_commit: str, *, staged: bool = False) -> list
     if staged:
         args.append("--cached")
     args.extend(["--name-status", "--find-renames", "-z", base_commit, "--"])
-    proc = _git(repo, *args)
+    proc = _git(repo, *args, keep_index=staged)
     tokens = proc.stdout.split(b"\0")
     changed: list[ChangedFile] = []
     index = 0
@@ -288,7 +295,7 @@ def index_tree(repo: Path) -> Generator[Path, None, None]:
         ],
         capture_output=True,
         check=False,
-        env=_clean_env(),
+        env=_clean_env(keep_index=True),
     )
     if proc.returncode != 0:
         shutil.rmtree(tmp_root, ignore_errors=True)

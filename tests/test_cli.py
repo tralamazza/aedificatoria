@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -66,6 +67,27 @@ def test_cli_staged_checks_staged_config(repo: Path, commit, write, capsys):
     assert main(["check", "--path", str(repo), "--staged", "--json"]) == 2
     payload = json.loads(capsys.readouterr().out)
     assert any(item["rule"] == "guard-config" for item in payload["findings"])
+
+
+def test_cli_staged_honors_hook_index(repo: Path, commit, write, capsys, monkeypatch, tmp_path):
+    strong = "def test_one():\n    assert 1 == 1\n    assert 2 == 2\n"
+    weak = "def test_one():\n    assert 1 == 1\n"
+    write(repo, "tests/test_app.py", strong)
+    commit(repo)
+
+    alt = tmp_path / "next-index"
+    env = {**os.environ, "GIT_INDEX_FILE": str(alt)}
+    subprocess.run(["git", "-C", str(repo), "read-tree", "HEAD"], env=env, check=True)
+    write(repo, "tests/test_app.py", weak)
+    subprocess.run(
+        ["git", "-C", str(repo), "add", "tests/test_app.py"], env=env, check=True
+    )
+    write(repo, "tests/test_app.py", strong)
+    monkeypatch.setenv("GIT_INDEX_FILE", str(alt))
+
+    assert main(["check", "--path", str(repo), "--staged", "--json"]) == 2
+    payload = json.loads(capsys.readouterr().out)
+    assert any(item["rule"] == "test-tampering" for item in payload["findings"])
 
 
 def test_cli_check_allows_clean_tree(repo: Path, commit, write, capsys):

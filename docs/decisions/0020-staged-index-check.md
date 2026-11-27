@@ -22,6 +22,8 @@ Add `aed check --staged`:
   worktree of the base commit.
 - Load `aed.toml` and the baseline from the staged tree, so a staged config or
   baseline weakening is evaluated as it will be committed.
+- Honor a hook-provided `GIT_INDEX_FILE` (for example `git commit --only`), so
+  the temporary commit index is checked instead of the default index.
 - Exclude untracked files: they are not part of the commit.
 - Use `--staged` in `.githooks/pre-commit`.
 
@@ -50,6 +52,8 @@ read-only and leaves no index or worktree behind.
 ## Invariants
 
 - `--staged` diffs only the index against the base.
+- Hook-provided `GIT_INDEX_FILE` is honored for both the diff and the
+  materialized head tree.
 - Untracked files never appear in staged check output.
 - All head-side file reads, config loads, baselines, and language scans use the
   materialized index tree.

@@ -294,7 +294,7 @@
       "extract_tarball": 3
     },
     "src/aedificatoria/git.py": {
-      "_clean_env": 2,
+      "_clean_env": 4,
       "_git": 5,
       "_numstat": 10,
       "_untracked": 7,
@@ -600,7 +600,8 @@
       "test_cli_check_json_blocks_one_way_door": 3,
       "test_cli_init_and_adr": 7,
       "test_cli_staged_checks_index_not_worktree": 4,
-      "test_cli_staged_checks_staged_config": 3
+      "test_cli_staged_checks_staged_config": 3,
+      "test_cli_staged_honors_hook_index": 2
     },
     "tests/test_github.py": {
       "test_evaluate_github_with_fake_client": 5,
