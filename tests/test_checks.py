@@ -127,6 +127,37 @@ def test_complexity_ratchet(repo: Path, commit, write):
     assert any(item.rule == "complexity" and "score" in item.message for item in findings)
 
 
+def test_python_init_reexports_resolve(repo: Path, write):
+    write(repo, "src/pkg/_internal.py", "def handle(x: int) -> int:\n    return x\n")
+    write(
+        repo,
+        "src/pkg/__init__.py",
+        "from ._internal import handle as run\n__all__ = [\"run\"]\n",
+    )
+
+    surface = pyast._resolved_public_api(repo, "src/pkg/__init__.py", Config())
+    assert surface["run"] == "(x:int)->int"
+
+
+def test_public_api_resolves_private_reexport(repo: Path, commit, write):
+    write(repo, "src/pkg/_internal.py", "def handle(x: int) -> int:\n    return x\n")
+    write(repo, "src/pkg/__init__.py", "from ._internal import handle\n")
+    commit(repo)
+    write(
+        repo,
+        "src/pkg/_internal.py",
+        "def handle(x: int, y: int) -> int:\n    return x + y\n",
+    )
+
+    findings = evaluate(repo, Config())
+    assert any(
+        item.rule == "public-api"
+        and item.path == "src/pkg/__init__.py"
+        and "signature changes" in item.evidence
+        for item in findings
+    )
+
+
 def test_public_api_break_requires_adr(repo: Path, commit, write):
     write(repo, "service.py", "def handle(x: int) -> int:\n    return x\n")
     commit(repo)

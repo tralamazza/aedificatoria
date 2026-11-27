@@ -13,7 +13,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from . import languages
+from . import languages, pyast
 from .config import Config
 from .git import tracked_source_files
 from .model import Finding
@@ -58,7 +58,10 @@ def _collect_file(root: Path, rel: str, config: Config, data: dict[str, Any]) ->
     if scores:
         data["complexity"][rel] = dict(sorted(scores.items()))
     if config.is_api(rel):
-        surface = adapter.public_api(tree)
+        if adapter.name == "python" and Path(rel).name == "__init__.py":
+            surface = pyast._resolved_public_api(root, rel, config)
+        else:
+            surface = adapter.public_api(tree)
         if surface:
             data["api"][rel] = dict(sorted(surface.items()))
 

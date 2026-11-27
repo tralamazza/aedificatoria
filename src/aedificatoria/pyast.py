@@ -146,6 +146,161 @@ def public_api(tree: ast.Module) -> dict[str, str]:
     return surface
 
 
+def _module_file(
+    root: Path,
+    rel: str,
+    module: str,
+    level: int,
+    config: Config,
+) -> str | None:
+    module_path = module.replace(".", "/")
+    candidates: list[Path] = []
+    if level:
+        base = Path(rel).parent
+        for _ in range(level - 1):
+            base = base.parent
+        stem = base / module_path if module_path else base
+        candidates.extend([stem.with_suffix(".py"), stem / "__init__.py"])
+    else:
+        for source_root in config.source_roots:
+            prefix = "" if source_root.strip("/") in ("", ".") else source_root.strip("/")
+            stem = Path(prefix) / module_path if module_path else Path(prefix)
+            candidates.extend([stem.with_suffix(".py"), stem / "__init__.py"])
+    root_resolved = root.resolve()
+    for candidate in candidates:
+        full = root / candidate
+        if not full.is_file():
+            continue
+        if not full.resolve().is_relative_to(root_resolved):
+            continue
+        return candidate.as_posix().lstrip("/")
+    return None
+
+
+def _target_surface(
+    root: Path,
+    rel: str,
+    node: ast.ImportFrom,
+    config: Config,
+    seen: set[str],
+) -> dict[str, str] | None:
+    target_rel = _module_file(root, rel, node.module or "", node.level, config)
+    if target_rel is None:
+        return None
+    try:
+        text = (root / target_rel).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+    if Path(target_rel).name == "__init__.py":
+        return _resolved_api(root, target_rel, config, seen)
+    tree = parse_text(target_rel, text)
+    return public_api(tree) if tree is not None else None
+
+
+def _merge_star(
+    surface: dict[str, str],
+    target: dict[str, str],
+    declared: set[str] | None,
+) -> None:
+    for key, value in target.items():
+        if key.startswith("_") or (declared is not None and key not in declared):
+            continue
+        surface[key] = value
+
+
+def _merge_alias(
+    surface: dict[str, str],
+    target: dict[str, str],
+    alias: ast.alias,
+    declared: set[str] | None,
+) -> None:
+    exported = alias.asname or alias.name
+    if exported.startswith("_"):
+        return
+    if declared is not None and exported not in declared:
+        return
+    prefix = alias.name
+    matches = [
+        key
+        for key in target
+        if key == prefix or key.startswith(prefix + ".")
+    ]
+    if matches:
+        for key in matches:
+            suffix = key[len(prefix) :]
+            surface[exported + suffix] = target[key]
+    elif declared is not None and exported in declared:
+        surface.setdefault(exported, "exported")
+
+
+def _merge_import(
+    surface: dict[str, str],
+    target: dict[str, str],
+    node: ast.ImportFrom,
+    declared: set[str] | None,
+) -> None:
+    for alias in node.names:
+        if alias.name == "*":
+            _merge_star(surface, target, declared)
+        else:
+            _merge_alias(surface, target, alias, declared)
+
+
+def _resolved_api(
+    root: Path,
+    rel: str,
+    config: Config,
+    seen: set[str],
+) -> dict[str, str]:
+    if rel in seen:
+        return {}
+    seen.add(rel)
+    try:
+        text = (root / rel).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return {}
+    tree = parse_text(rel, text)
+    if tree is None:
+        return {}
+    surface = public_api(tree)
+    if Path(rel).name != "__init__.py":
+        return surface
+
+    declared = declared_all(tree)
+    for node in tree.body:
+        if not isinstance(node, ast.ImportFrom):
+            continue
+        target = _target_surface(root, rel, node, config, seen)
+        if target is not None:
+            _merge_import(surface, target, node, declared)
+    return surface
+
+
+def _resolved_public_api(root: Path, rel: str, config: Config) -> dict[str, str]:
+    """Resolve an `__init__.py` surface through local re-exports."""
+    if Path(rel).name != "__init__.py":
+        try:
+            tree = parse_text(rel, (root / rel).read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError):
+            return {}
+        return public_api(tree) if tree is not None else {}
+    return _resolved_api(root, rel, config, set())
+
+
+def _package_initializers(root: Path, rel: str, _config: Config) -> list[str]:
+    """Return existing `__init__.py` ancestors for a repository path."""
+    current = Path(rel).parent
+    found: list[str] = []
+    while True:
+        candidate = (current / "__init__.py").as_posix().lstrip("/")
+        if (root / candidate).is_file():
+            found.append(candidate)
+        if current in {Path("."), Path("")}:
+            break
+        current = current.parent
+    return found
+
+
 class _ComplexityVisitor(ast.NodeVisitor):
     def __init__(self) -> None:
         self.stack: list[str] = []

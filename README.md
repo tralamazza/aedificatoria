@@ -74,9 +74,10 @@ and `evidence` are optional per finding.
 | `new-dependency` | error | New third-party import not allowlisted. | Reuse a dependency or record an allowlist decision. |
 | `adr-quality` | warn | ADR missing title, status, or `## Decision`. | Fix the ADR. |
 
-Private paths (`_module.py`, `_dir/`, except `__init__.py`) are excluded from
-public API. `docs/**`, `examples/**`, and `benchmarks/**` are excluded from
-production metrics by default. An accepted ADR needs a `# title`,
+Private paths (`_module.py`, `_dir/`) are excluded from public API unless a
+symbol is explicitly re-exported through a package `__init__.py`. `docs/**`,
+`examples/**`, and `benchmarks/**` are excluded from production metrics by
+default. An accepted ADR needs a `# title`,
 `- Status: accepted`, and a `## Decision`; create it with `aed adr new TITLE`.
 
 ## Configuration
@@ -111,11 +112,11 @@ aed baseline   # commit aed-baseline.json
 aed check
 ```
 
-The baseline stores per-function complexity, public API signatures, external
-dependencies, package edges, per-test assertion counts, and parameterized
-test-case counts. Growth is ratcheted against it; removals and assertion/case
-drops are always errors. Renames look like a removal plus an addition and require
-a refresh.
+The baseline stores per-function complexity, public API signatures (including
+resolved Python `__init__.py` re-exports), external dependencies, package edges,
+per-test assertion counts, and parameterized test-case counts. Growth is
+ratcheted against it; removals and assertion/case drops are always errors.
+Renames look like a removal plus an addition and require a refresh.
 
 ## History audit
 
@@ -159,7 +160,7 @@ committed. `--no-verify` bypasses the local hook; CI is authoritative. See
 
 | Language | Parser | Public API | Tests | Dependencies |
 |---|---|---|---|---|
-| Python | `ast` | top-level functions/classes, `__all__` | `test_*`, asserts, skip/xfail | absolute imports |
+| Python | `ast` | top-level functions/classes, `__all__`, `__init__` re-exports | `test_*`, asserts, skip/xfail | absolute imports |
 | Rust | tree-sitter | `pub` items, fields, variants, impl methods | `#[test]`, `assert!`, `#[ignore]` | `use` roots, Cargo tables |
 | JS/TS | tree-sitter | ES/TS exports, CJS exports, methods | `test`/`it`/`describe`, `.skip`/`.only`, `.each` case tables | imports, `require`, `package.json` |
 

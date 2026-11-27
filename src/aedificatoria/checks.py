@@ -10,7 +10,12 @@ from pathlib import Path
 from . import baseline, cargo, languages
 from .config import Config, load_config
 from .model import SEVERITY_RANK, ChangedFile, Context, Finding, TestInfo
-from .pyast import cycle_evidence, strongly_connected
+from .pyast import (
+    cycle_evidence,
+    _package_initializers,
+    _resolved_public_api,
+    strongly_connected,
+)
 
 
 def _relevant(ctx: Context) -> list[ChangedFile]:
@@ -505,41 +510,92 @@ def _api_severity(ctx: Context, valid_adrs: list[ChangedFile], path: str) -> tup
     return "error", f"{message} without an ADR"
 
 
-def check_public_api(ctx: Context) -> list[Finding]:
-    valid_adrs = [item for item in _adr_changes(ctx) if _adr_valid(ctx, item)[0]]
+def _package_api_findings(
+    ctx: Context, valid_adrs: list[ChangedFile]
+) -> list[Finding]:
     findings: list[Finding] = []
+    changed_paths = {item.path for item in _relevant(ctx)}
+    seen: set[str] = set()
     for item in _relevant(ctx):
         adapter = languages.get(item.path)
         if (
             adapter is None
-            or not ctx.config.is_api(item.path)
+            or adapter.name != "python"
+            or not ctx.config.is_private(item.path)
             or ctx.config.is_metric_excluded(item.path)
         ):
             continue
-        if item.status == "A" or not languages.same_language(item.base_path, item.path):
-            continue
-        base_tree = adapter.parse_text(item.base_path, ctx.base_text(item.base_path))
-        if base_tree is None:
-            continue
-        head_tree = (
-            adapter.parse_text(item.path, ctx.head_text(item.path)) if not item.is_deleted else None
-        )
-        base_surface = adapter.public_api(base_tree)
-        head_surface = adapter.public_api(head_tree) if head_tree is not None else {}
-
-        removed, changed = _api_surface_change(base_surface, head_surface)
-        if not removed and not changed:
-            continue
-        severity, message = _api_severity(ctx, valid_adrs, item.path)
-        findings.append(
-            Finding(
-                "public-api",
-                severity,
-                message,
-                path=item.path,
-                evidence=_api_evidence(base_surface, head_surface, removed, changed),
+        initializers = set(_package_initializers(ctx.base_dir, item.base_path, ctx.config))
+        initializers.update(_package_initializers(ctx.repo, item.path, ctx.config))
+        for path in sorted(initializers):
+            if path in seen or path in changed_paths:
+                continue
+            seen.add(path)
+            base_surface = _resolved_public_api(ctx.base_dir, path, ctx.config)
+            head_surface = _resolved_public_api(ctx.repo, path, ctx.config)
+            removed, changed = _api_surface_change(base_surface, head_surface)
+            if not removed and not changed:
+                continue
+            severity, message = _api_severity(ctx, valid_adrs, path)
+            findings.append(
+                Finding(
+                    "public-api",
+                    severity,
+                    message,
+                    path=path,
+                    evidence=_api_evidence(base_surface, head_surface, removed, changed),
+                )
             )
-        )
+    return findings
+
+
+def _api_surface(root: Path, path: str, tree, adapter, config: Config) -> dict[str, str]:
+    if adapter.name == "python" and Path(path).name == "__init__.py":
+        return _resolved_public_api(root, path, config)
+    return adapter.public_api(tree) if tree is not None else {}
+
+
+def _file_api_finding(
+    ctx: Context, item: ChangedFile, valid_adrs: list[ChangedFile]
+) -> Finding | None:
+    adapter = languages.get(item.path)
+    if (
+        adapter is None
+        or not ctx.config.is_api(item.path)
+        or ctx.config.is_metric_excluded(item.path)
+    ):
+        return None
+    if item.status == "A" or not languages.same_language(item.base_path, item.path):
+        return None
+    base_tree = adapter.parse_text(item.base_path, ctx.base_text(item.base_path))
+    if base_tree is None:
+        return None
+    head_tree = (
+        adapter.parse_text(item.path, ctx.head_text(item.path)) if not item.is_deleted else None
+    )
+    base_surface = _api_surface(ctx.base_dir, item.base_path, base_tree, adapter, ctx.config)
+    head_surface = _api_surface(ctx.repo, item.path, head_tree, adapter, ctx.config)
+    removed, changed = _api_surface_change(base_surface, head_surface)
+    if not removed and not changed:
+        return None
+    severity, message = _api_severity(ctx, valid_adrs, item.path)
+    return Finding(
+        "public-api",
+        severity,
+        message,
+        path=item.path,
+        evidence=_api_evidence(base_surface, head_surface, removed, changed),
+    )
+
+
+def check_public_api(ctx: Context) -> list[Finding]:
+    valid_adrs = [item for item in _adr_changes(ctx) if _adr_valid(ctx, item)[0]]
+    findings = [
+        finding
+        for item in _relevant(ctx)
+        if (finding := _file_api_finding(ctx, item, valid_adrs)) is not None
+    ]
+    findings.extend(_package_api_findings(ctx, valid_adrs))
     return findings
 
 

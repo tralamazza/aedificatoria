@@ -103,8 +103,9 @@ the pre-rebase sequence.
   refactors therefore look like regressions; judge magnitude and context.
 - Merge test findings are often topology noise. Compare net tests/assertions; do
   not treat raw counts as defect counts.
-- Public API ignores private paths (`_module.py`, `_dir/`, except `__init__.py`).
-  `metric_excludes` keeps docs/examples/benchmarks out of production metrics.
+- Public API ignores private paths (`_module.py`, `_dir/`) unless a symbol is
+  explicitly re-exported through a package `__init__.py`. `metric_excludes` keeps
+  docs/examples/benchmarks out of production metrics.
 - Per-function complexity findings start with a backtick; total complexity starts
   with `total complexity`; API removals with `public symbol`.
 

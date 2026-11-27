@@ -70,6 +70,26 @@ def test_baseline_ignores_private_api_and_examples(repo: Path, commit, write):
     assert not any(item.rule == "baseline" for item in findings)
 
 
+def test_baseline_resolves_private_reexport(repo: Path, commit, write):
+    write(repo, "src/pkg/_internal.py", "def handle(x: int) -> int:\n    return x\n")
+    write(repo, "src/pkg/__init__.py", "from ._internal import handle\n")
+    snapshot(repo)
+    commit(repo)
+    write(
+        repo,
+        "src/pkg/_internal.py",
+        "def handle(x: int, y: int) -> int:\n    return x + y\n",
+    )
+
+    findings = evaluate(repo, Config())
+    assert any(
+        item.rule == "baseline"
+        and item.path == "src/pkg/__init__.py"
+        and "signature changed" in item.message
+        for item in findings
+    )
+
+
 def test_baseline_detects_each_case_shrink(repo: Path, commit, write):
     source = """
 test.each([

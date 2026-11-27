@@ -2,7 +2,7 @@
 
 - Status: accepted
 - Date: 2026-11-27
-- Amended by: 0022 (parameterized test cases; baseline v3)
+- Amended by: 0022 (parameterized test cases; baseline v3); 0023 (Python package exports)
 
 ## Context
 
