@@ -141,7 +141,7 @@ def _atomic_finding(
     commit: str,
     subject: str,
 ) -> list[Finding]:
-    if len(parents) > 1:
+    if not parents or len(parents) > 1:
         return []
     over_files = config.max_changed_files > 0 and files > config.max_changed_files
     over_lines = config.max_changed_lines > 0 and lines > config.max_changed_lines

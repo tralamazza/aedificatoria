@@ -49,17 +49,19 @@ def test_history_detects_new_cycle(repo: Path, commit, write):
 
 def test_history_marks_squash_and_flags_oversized_atomic(repo: Path, commit, write):
     write(repo, "README.md", "base\n")
+    write(repo, "seed.py", "value = 0\n")
     commit(repo, "base")
     for index in range(3):
         write(repo, f"module_{index}.py", f"value = {index}\n")
     commit(repo, "feat: bulk change (#42)")
 
-    points = history.evaluate(repo, Config(max_changed_files=2, max_changed_lines=2), limit=5)
+    points = history.evaluate(repo, Config(max_changed_files=1, max_changed_lines=1), limit=5)
+    assert points[0].regressions == ()
     point = points[-1]
     assert point.kind == "squash"
     assert point.pr == "42"
     assert point.files == 3
-    assert point.lines > 2
+    assert point.lines > 1
     assert any("large atomic squash #42" in item.message for item in point.regressions)
     assert "[squash #42]" in history.render_text(points)
 

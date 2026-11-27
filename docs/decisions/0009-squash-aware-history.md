@@ -22,7 +22,8 @@ Make history squash-aware and move the authoritative audit to the PR branch:
 - Mark commits with multiple parents as `merge`.
 - Warn when a single-parent commit exceeds `max_changed_files` or
   `max_changed_lines`, stating that it is a large atomic change and its internal
-  commits are unavailable.
+  commits are unavailable. Root commits are exempt: there is no parent to diff
+  against and no intermediate history to lose.
 - Show kind, churn, and the squash marker in the timeline and the ranked
   regressions.
 
