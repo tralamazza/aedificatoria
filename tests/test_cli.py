@@ -99,3 +99,39 @@ def test_cli_check_allows_clean_tree(repo: Path, commit, write, capsys):
     assert code == 0
     assert payload["verdict"] == "allow"
     assert payload["changed"]["files"] == 0
+
+
+def test_cli_doctor_json(capsys):
+    from aedificatoria import doctor
+
+    code = main(["doctor", "--json"])
+    payload = json.loads(capsys.readouterr().out)
+    assert code == 0
+    assert payload["ok"] is True
+    names = {item["name"] for item in payload["tools"]}
+    assert {"python", "git", "tree-sitter", "cargo", "gh", "glab"} <= names
+    assert payload["required_missing"] == []
+    assert doctor.ok(doctor.collect())
+
+
+def test_cli_doctor_reports_missing_required(monkeypatch, capsys):
+    from aedificatoria import doctor
+
+    monkeypatch.setattr(
+        doctor,
+        "collect",
+        lambda: [doctor.ToolStatus("git", "binary", True, False, "", "", False)],
+    )
+    code = main(["doctor"])
+    output = capsys.readouterr().out
+    assert code == 1
+    assert "[missing] git" in output
+    assert "required: missing git" in output
+
+
+def test_doctor_optional_missing_is_not_a_failure():
+    from aedificatoria import doctor
+
+    tools = [doctor.ToolStatus("glab", "binary", False, False, "", "GitLab MR audits", True)]
+    assert doctor.ok(tools)
+    assert "optional: missing glab" in doctor.render_text(tools)

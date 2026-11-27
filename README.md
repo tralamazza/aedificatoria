@@ -15,6 +15,7 @@ Requires Python 3.11+ and a Git repository with at least one commit.
 uv venv .venv
 uv pip install -e '.[dev]'
 
+.venv/bin/aed doctor    # required and optional tools
 .venv/bin/aed init       # aed.toml + docs/decisions/0001-*.md
 .venv/bin/aed baseline   # aed-baseline.json
 .venv/bin/aed check
@@ -22,6 +23,19 @@ uv pip install -e '.[dev]'
 ```
 
 `aed check` never stages or commits.
+
+## Tool diagnostics
+
+```sh
+aed doctor
+aed doctor --json
+```
+
+Required: Python 3.11+, `git`, and the pinned tree-sitter runtime/grammars.
+Optional: `cargo` for advisory metadata, `gh` for GitHub PR audits, and `glab`
+for GitLab MR audits. Optional tools are reported but do not fail the command.
+Exit `1` when a required tool is missing or incompatible. The command is local,
+read-only, and makes no network calls.
 
 | Exit | Verdict | Action |
 |---:|---|---|
@@ -36,6 +50,7 @@ uv pip install -e '.[dev]'
 | Command | Purpose |
 |---|---|
 | `aed check [--base REV] [--config PATH] [--staged] [--json]` | Check working tree or staged index against a base. |
+| `aed doctor [--json]` | Check required and optional installed tools. |
 | `aed baseline` | Write the persistent metric baseline. |
 | `aed history [--limit N] [--all] [--jobs N]` | Audit local history. |
 | `aed history --github-pr N --repo OWNER/REPO` | Audit a GitHub PR via `gh`. |

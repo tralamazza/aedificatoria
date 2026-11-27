@@ -8,15 +8,8 @@ import sys
 from pathlib import Path
 
 from . import __version__
-from . import baseline as baseline_store
-from . import cargo as cargo_tools
+from . import doctor as doctor_tools
 from . import forge
-from . import github as github_audit
-from . import gitlab as gitlab_audit
-from . import history as history_audit
-from . import languages as language_adapters
-from .adr import create_adr, init_project
-from .checks import run_checks
 from .config import Config, load_config
 from .git import GitError, base_worktree, changed_files, index_tree, repo_root, resolve_commit
 from .model import ChangedFile, Context
@@ -101,6 +94,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     rules = sub.add_parser("rules", help="Show the active rules and thresholds")
     _add_path(rules)
+
+    doctor = sub.add_parser("doctor", help="Check required and optional installed tools")
+    doctor.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
     return parser
 
 
@@ -113,6 +109,8 @@ def _run_check(
     config: Config,
     config_path: str,
 ):
+    from .checks import run_checks
+
     with base_worktree(repo, commit) as base_dir:
         context = Context(
             repo=head_dir,
@@ -153,6 +151,8 @@ def cmd_check(args: argparse.Namespace) -> int:
 
 
 def cmd_baseline(args: argparse.Namespace) -> int:
+    from . import baseline as baseline_store
+
     root = repo_root(Path(args.path))
     config = load_config(root)
     if not config.baseline_path:
@@ -165,6 +165,9 @@ def cmd_baseline(args: argparse.Namespace) -> int:
 
 
 def _history_github(root: Path, config, args: argparse.Namespace):
+    from . import github as github_audit
+    from . import history as history_audit
+
     if args.since or args.head:
         print("aed: --github-pr cannot be combined with --since/--head", file=sys.stderr)
         return None
@@ -182,6 +185,9 @@ def _history_github(root: Path, config, args: argparse.Namespace):
 
 
 def _history_gitlab(root: Path, config, args: argparse.Namespace):
+    from . import gitlab as gitlab_audit
+    from . import history as history_audit
+
     if args.since or args.head:
         print("aed: --gitlab-mr cannot be combined with --since/--head", file=sys.stderr)
         return None
@@ -199,6 +205,8 @@ def _history_gitlab(root: Path, config, args: argparse.Namespace):
 
 
 def cmd_history(args: argparse.Namespace) -> int:
+    from . import history as history_audit
+
     root = repo_root(Path(args.path))
     config = load_config(root)
     if args.github_pr is not None and args.gitlab_mr is not None:
@@ -232,6 +240,8 @@ def cmd_history(args: argparse.Namespace) -> int:
 
 
 def cmd_init(args: argparse.Namespace) -> int:
+    from .adr import init_project
+
     root = Path(args.path).resolve()
     created, existing = init_project(root)
     for path in created:
@@ -243,6 +253,8 @@ def cmd_init(args: argparse.Namespace) -> int:
 
 
 def cmd_adr_new(args: argparse.Namespace) -> int:
+    from .adr import create_adr
+
     root = Path(args.path).resolve()
     config = load_config(root)
     path = create_adr(root, args.title, status=args.status, config=config)
@@ -251,6 +263,9 @@ def cmd_adr_new(args: argparse.Namespace) -> int:
 
 
 def cmd_rules(args: argparse.Namespace) -> int:
+    from . import cargo as cargo_tools
+    from . import languages as language_adapters
+
     root = Path(args.path).resolve()
     config = load_config(root)
     print(f"base: {config.base}")
@@ -285,6 +300,15 @@ def cmd_rules(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_doctor(args: argparse.Namespace) -> int:
+    tools = doctor_tools.collect()
+    if args.json:
+        print(json.dumps(doctor_tools.payload(tools), indent=2))
+    else:
+        print(doctor_tools.render_text(tools))
+    return 0 if doctor_tools.ok(tools) else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -301,6 +325,8 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_adr_new(args)
         if args.cmd == "rules":
             return cmd_rules(args)
+        if args.cmd == "doctor":
+            return cmd_doctor(args)
     except forge.ForgeError as exc:
         print(f"aed: {exc}", file=sys.stderr)
         return 2
