@@ -215,6 +215,29 @@ GitHub's retention of the PR objects. A purged commit returns 404 and the
 internals are unrecoverable. Persist `aed history --json` at merge time when a
 durable audit is required.
 
+#### GitLab API fallback
+
+GitLab keeps MR refs as well:
+
+```sh
+git fetch origin '+refs/merge-requests/*/head:refs/remotes/origin/merge-requests/*'
+aed history --head refs/remotes/origin/merge-requests/123/head --since origin/main
+```
+
+If those refs are purged, the opt-in GitLab mode uses `glab`:
+
+```sh
+glab auth login        # once; or export GITLAB_TOKEN
+aed history --gitlab-mr 123 --repo group/subgroup/repo --limit 20
+```
+
+It uses `glab api` to list MR commits, downloads a source archive per commit,
+and reads commit stats plus the diff list for churn. Project paths may contain
+subgroups and are URL-encoded for the API. `glab` handles auth, pagination,
+`GITLAB_TOKEN`/`OAUTH_TOKEN`, and `GITLAB_HOST`. Like the GitHub mode, it is
+report-only, non-hermetic, never runs without the flag, and is never used by
+`aed check`. A missing project or purged commit fails with the API error.
+
 Limits: first-parent only; the current configuration is used for every commit;
 historical ADRs, one-way doors, and config weakening are not re-evaluated; cost
 grows with `--limit` and repository size.
@@ -282,9 +305,9 @@ the change. Hidden tests should still live outside the agent's writable tree.
   commit, and do not re-evaluate historical ADRs or one-way doors. Squash merges
   are atomic: history detects PR-style squashes and flags oversized ones, but the
   intermediate commits are unrecoverable. Check the PR branch before squashing.
-- The GitHub API fallback is opt-in and non-hermetic: it needs `gh`, an
-  authenticated session, network, and GitHub retention; the PR commit list is
-  capped at 250. It never affects `aed check`.
+- The GitHub/GitLab API fallbacks are opt-in and non-hermetic: they need
+  `gh`/`glab` authenticated, network, and host retention. The GitHub PR commit
+  list is capped at 250. They never affect `aed check`.
 - The guard is per-diff. An ADR-authorized configuration weakening still exits 0,
   replacing an assertion with a weaker one while keeping the count is semantic
   and not detected, and cumulative drift across many small commits is handled

@@ -10,29 +10,15 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
-import tarfile
 import tempfile
 from contextlib import contextmanager
-from dataclasses import dataclass, replace
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Generator
 from urllib.parse import urlparse
 
+from .forge import ForgeCommit, ForgeError, extract_tarball
 from .git import remote_url
-
-
-class GitHubError(RuntimeError):
-    pass
-
-
-@dataclass(frozen=True)
-class PrCommit:
-    sha: str
-    date: str
-    subject: str
-    parents: tuple[str, ...]
-    files: int = 0
-    lines: int = 0
 
 
 def parse_slug(url: str) -> str:
@@ -56,27 +42,6 @@ def slug_from_remote(repo: Path) -> str:
     return parse_slug(remote_url(repo))
 
 
-def _safe_members(members: list[tarfile.TarInfo]) -> list[tarfile.TarInfo]:
-    safe: list[tarfile.TarInfo] = []
-    for member in members:
-        path = Path(member.name)
-        if path.is_absolute() or ".." in path.parts:
-            raise GitHubError(f"unsafe path in tarball: {member.name}")
-        if member.isfile() or member.isdir():
-            safe.append(member)
-    return safe
-
-
-def extract_tarball(archive: Path, destination: Path) -> Path:
-    destination.mkdir(parents=True, exist_ok=True)
-    with tarfile.open(archive, "r:gz") as tar:
-        tar.extractall(destination, members=_safe_members(tar.getmembers()), filter="data")
-    entries = list(destination.iterdir())
-    if len(entries) == 1 and entries[0].is_dir():
-        return entries[0]
-    return destination
-
-
 class GitHubClient:
     def __init__(self, repo: str, gh: str = "gh", timeout: float = 120.0) -> None:
         self.repo = repo
@@ -91,21 +56,21 @@ class GitHubClient:
         try:
             proc = subprocess.run(args, capture_output=True, timeout=self.timeout, check=False)
         except FileNotFoundError as exc:
-            raise GitHubError(
+            raise ForgeError(
                 "`gh` CLI is required for --github-pr; install it and run `gh auth login`"
             ) from exc
         except subprocess.TimeoutExpired as exc:
-            raise GitHubError(f"gh api timed out: {path}") from exc
+            raise ForgeError(f"gh api timed out: {path}") from exc
         if proc.returncode != 0:
             detail = proc.stderr.decode("utf-8", "replace").strip()[:400]
-            raise GitHubError(detail or f"gh api failed: {path}")
+            raise ForgeError(detail or f"gh api failed: {path}")
         return proc.stdout
 
     def _json(self, path: str, paginate: bool = False) -> Any:
         try:
             payload = json.loads(self._run(path, paginate=paginate))
         except json.JSONDecodeError as exc:
-            raise GitHubError(f"gh api returned invalid JSON: {path}") from exc
+            raise ForgeError(f"gh api returned invalid JSON: {path}") from exc
         if paginate and isinstance(payload, list):
             items: list[Any] = []
             for page in payload:
@@ -129,7 +94,7 @@ class GitHubClient:
         lines += deletions if isinstance(deletions, int) else 0
         return count, lines
 
-    def _parse_commit(self, item: object) -> PrCommit | None:
+    def _parse_commit(self, item: object) -> ForgeCommit | None:
         if not isinstance(item, dict):
             return None
         sha = item.get("sha")
@@ -145,13 +110,13 @@ class GitHubClient:
             if isinstance(parent, dict) and isinstance(parent.get("sha"), str)
         )
         subject = message.splitlines()[0] if isinstance(message, str) and message else ""
-        return PrCommit(sha, date if isinstance(date, str) else "", subject, parents)
+        return ForgeCommit(sha, date if isinstance(date, str) else "", subject, parents)
 
-    def pr_commits(self, pr: int, limit: int) -> list[PrCommit]:
+    def pr_commits(self, pr: int, limit: int) -> list[ForgeCommit]:
         payload = self._json(f"repos/{self.repo}/pulls/{pr}/commits", paginate=True)
         if not isinstance(payload, list):
-            raise GitHubError(f"unexpected PR commit payload for #{pr}")
-        commits: list[PrCommit] = []
+            raise ForgeError(f"unexpected PR commit payload for #{pr}")
+        commits: list[ForgeCommit] = []
         for item in payload[-max(1, limit) :]:
             commit = self._parse_commit(item)
             if commit is None:
@@ -167,7 +132,7 @@ class GitHubClient:
             archive = root / "tree.tar.gz"
             data = self._run(f"repos/{self.repo}/tarball/{sha}")
             if not data.startswith(b"\x1f\x8b"):
-                raise GitHubError(f"GitHub tarball for {sha[:12]} was not gzip data")
+                raise ForgeError(f"GitHub tarball for {sha[:12]} was not gzip data")
             archive.write_bytes(data)
             yield extract_tarball(archive, root / "tree")
         finally:

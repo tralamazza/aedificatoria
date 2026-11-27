@@ -14,7 +14,7 @@ from pathlib import Path
 import re
 from typing import Any, Generator
 
-from . import baseline, github
+from . import baseline
 from .config import Config
 from .git import (
     base_worktree,
@@ -266,16 +266,16 @@ def _materialize(repo: Path, sha: str, client: Any) -> Generator[Path, None, Non
             yield tree
 
 
-def evaluate_github(
+def evaluate_forge(
     repo: Path,
     config: Config,
-    pr: int,
+    number: int,
     limit: int,
     client: Any,
 ) -> list[HistoryPoint]:
     points: list[HistoryPoint] = []
     previous: dict[str, Any] | None = None
-    for item in client.pr_commits(pr, limit):
+    for item in client.pr_commits(number, limit):
         with _materialize(repo, item.sha, client) as root:
             metrics = baseline.collect(root, config)
         regressions = (

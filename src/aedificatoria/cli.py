@@ -10,7 +10,9 @@ from pathlib import Path
 from . import __version__
 from . import baseline as baseline_store
 from . import cargo as cargo_tools
+from . import forge
 from . import github as github_audit
+from . import gitlab as gitlab_audit
 from . import history as history_audit
 from . import languages as language_adapters
 from .adr import create_adr, init_project
@@ -54,9 +56,19 @@ def build_parser() -> argparse.ArgumentParser:
         "--github-pr",
         type=int,
         default=None,
-        help="Audit a PR through the GitHub API (requires network and a token for private repos)",
+        help="Audit a GitHub PR through the API (requires gh and auth)",
     )
-    hist.add_argument("--repo", default=None, help="GitHub owner/repo for --github-pr (default: origin)")
+    hist.add_argument(
+        "--gitlab-mr",
+        type=int,
+        default=None,
+        help="Audit a GitLab MR through the API (requires glab and auth)",
+    )
+    hist.add_argument(
+        "--repo",
+        default=None,
+        help="GitHub owner/repo or GitLab full project path (default: origin)",
+    )
     hist.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
 
     adr = sub.add_parser("adr", help="Architecture decision records")
@@ -122,7 +134,7 @@ def _history_github(root: Path, config, args: argparse.Namespace):
         print("aed: cannot determine GitHub repository; pass --repo owner/name", file=sys.stderr)
         return None
     client = github_audit.GitHubClient(slug)
-    points = history_audit.evaluate_github(
+    points = history_audit.evaluate_forge(
         root, config, args.github_pr, max(1, args.limit), client
     )
     source = {"github_pr": args.github_pr, "repo": slug, "api": "github"}
@@ -130,20 +142,43 @@ def _history_github(root: Path, config, args: argparse.Namespace):
     return points, source, header
 
 
+def _history_gitlab(root: Path, config, args: argparse.Namespace):
+    if args.since or args.head:
+        print("aed: --gitlab-mr cannot be combined with --since/--head", file=sys.stderr)
+        return None
+    project = args.repo or gitlab_audit.project_path_from_remote(root)
+    if not project:
+        print("aed: cannot determine GitLab project; pass --repo group/project", file=sys.stderr)
+        return None
+    client = gitlab_audit.GitLabClient(project, cwd=root)
+    points = history_audit.evaluate_forge(
+        root, config, args.gitlab_mr, max(1, args.limit), client
+    )
+    source = {"gitlab_mr": args.gitlab_mr, "repo": project, "api": "gitlab"}
+    header = f"MR !{args.gitlab_mr} via GitLab API ({project}; retention not guaranteed)"
+    return points, source, header
+
+
 def cmd_history(args: argparse.Namespace) -> int:
     root = repo_root(Path(args.path))
     config = load_config(root)
+    if args.github_pr is not None and args.gitlab_mr is not None:
+        print("aed: --github-pr and --gitlab-mr are mutually exclusive", file=sys.stderr)
+        return 2
     if args.github_pr is not None:
         prepared = _history_github(root, config, args)
-        if prepared is None:
-            return 2
-        points, source, header = prepared
+    elif args.gitlab_mr is not None:
+        prepared = _history_gitlab(root, config, args)
     else:
         points = history_audit.evaluate(
             root, config, limit=max(1, args.limit), since=args.since, head=args.head or "HEAD"
         )
         source = None
         header = "first-parent commits"
+        prepared = (points, source, header)
+    if prepared is None:
+        return 2
+    points, source, header = prepared
     if args.json:
         print(json.dumps(history_audit.json_payload(points, source), indent=2))
     else:
@@ -221,7 +256,7 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_adr_new(args)
         if args.cmd == "rules":
             return cmd_rules(args)
-    except github_audit.GitHubError as exc:
+    except forge.ForgeError as exc:
         print(f"aed: {exc}", file=sys.stderr)
         return 2
     except GitError as exc:

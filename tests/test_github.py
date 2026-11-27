@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from aedificatoria import github, history
+from aedificatoria import forge, github, history
 from aedificatoria.cli import main
 from aedificatoria.config import Config
 
@@ -38,7 +38,7 @@ def test_extract_tarball(tmp_path: Path):
     with tarfile.open(archive, "w:gz") as tar:
         tar.add(source, arcname="acme-aed-sha")
 
-    root = github.extract_tarball(archive, tmp_path / "out")
+    root = forge.extract_tarball(archive, tmp_path / "out")
     assert (root / "app.py").read_text(encoding="utf-8") == "value = 1\n"
 
 
@@ -49,8 +49,8 @@ def test_extract_tarball_rejects_traversal(tmp_path: Path):
         info.size = 1
         tar.addfile(info, io.BytesIO(b"x"))
 
-    with pytest.raises(github.GitHubError):
-        github.extract_tarball(archive, tmp_path / "out")
+    with pytest.raises(forge.ForgeError):
+        forge.extract_tarball(archive, tmp_path / "out")
 
 
 def test_github_client_paginates_and_flattens(monkeypatch):
@@ -74,7 +74,7 @@ def test_github_client_paginates_and_flattens(monkeypatch):
 
 
 def test_github_client_requires_gh():
-    with pytest.raises(github.GitHubError):
+    with pytest.raises(forge.ForgeError):
         github.GitHubClient("acme/aed", gh="/nonexistent/gh")._json("repos/acme/aed")
 
 
@@ -84,8 +84,8 @@ class FakeClient:
 
     def pr_commits(self, pr: int, limit: int):
         commits = [
-            github.PrCommit("a" * 40, "2026-01-01T00:00:00Z", "first", (), 1, 1),
-            github.PrCommit("b" * 40, "2026-01-02T00:00:00Z", "second", ("a" * 40,), 1, 2),
+            forge.ForgeCommit("a" * 40, "2026-01-01T00:00:00Z", "first", (), 1, 1),
+            forge.ForgeCommit("b" * 40, "2026-01-02T00:00:00Z", "second", ("a" * 40,), 1, 2),
         ]
         return commits[-limit:]
 
@@ -108,7 +108,7 @@ def _roots(tmp_path: Path) -> dict[str, Path]:
 
 
 def test_evaluate_github_with_fake_client(repo: Path, tmp_path: Path):
-    points = history.evaluate_github(repo, Config(), 7, 10, FakeClient(_roots(tmp_path)))
+    points = history.evaluate_forge(repo, Config(), 7, 10, FakeClient(_roots(tmp_path)))
     assert [point.subject for point in points] == ["first", "second"]
     assert points[0].regressions == ()
     assert any("public API grew" in item.message for item in points[1].regressions)
