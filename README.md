@@ -7,19 +7,45 @@ commit materialized into a temporary tree. `--staged` compares the index instead
 It exits non-zero on mechanical violations. No LLM calls, no network, no source
 mutation.
 
-## Install and first run
+## Install
 
-Requires Python 3.11+ and a Git repository with at least one commit.
+Requires Python 3.11+ and Git.
+
+```sh
+uv tool install aedificatoria
+# or
+pipx install aedificatoria
+
+aed doctor
+```
+
+For a one-off run without a persistent install:
+
+```sh
+uvx --from aedificatoria aed check --staged
+# or
+pipx run --spec aedificatoria aed check --staged
+```
+
+In a project virtualenv, `pip install aedificatoria` also works. Then start with:
+
+```sh
+aed init       # aed.toml + docs/decisions/0001-*.md
+aed baseline   # aed-baseline.json
+aed check
+aed check --json
+```
+
+## Install from source
 
 ```sh
 uv venv .venv
 uv pip install -e '.[dev]'
 
-.venv/bin/aed doctor    # required and optional tools
-.venv/bin/aed init       # aed.toml + docs/decisions/0001-*.md
-.venv/bin/aed baseline   # aed-baseline.json
+.venv/bin/aed doctor
+.venv/bin/aed init
+.venv/bin/aed baseline
 .venv/bin/aed check
-.venv/bin/aed check --json
 ```
 
 `aed check` never stages or commits.
