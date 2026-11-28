@@ -309,11 +309,20 @@ def _template_declarations(node: Node, prefix: str, api: dict[str, str]) -> None
 
 def _typedef_declaration(node: Node, prefix: str, api: dict[str, str]) -> None:
     identifiers = [item for item in node.named_children if item.type == "type_identifier"]
+    record = next(
+        (
+            nested
+            for nested in node.named_children
+            if nested.type in {"struct_specifier", "union_specifier", "enum_specifier"}
+        ),
+        None,
+    )
     for nested in node.named_children:
         if nested.type in {"struct_specifier", "union_specifier", "enum_specifier"}:
             _add_aggregate(nested, prefix, api)
     if identifiers:
-        api[prefix + _text(identifiers[-1])] = "typedef:" + _norm(_text(node))
+        value = "typedef:" + (record.type if record is not None else _norm(_text(node)))
+        api[prefix + _text(identifiers[-1])] = value
 
 
 def _declarations(container: Node, prefix: str, api: dict[str, str]) -> None:
@@ -516,15 +525,57 @@ def abi_surface(path: str, text: str | None) -> dict[str, str]:
     return api
 
 
+_LAYOUT_ATTRIBUTE_RE = re.compile(
+    r"\[\[[^\]]*\]\]|__attribute__\s*\(\([^)]*\)\)|__declspec\s*\([^)]*\)"
+)
+
+
 def _record_header(node: Node) -> str:
-    text = _text(node)
-    return _semantic_text(text.split("{", 1)[0])
+    text = _COMMENT_RE.sub("", _text(node).split("{", 1)[0])
+
+    def keep_layout(match: re.Match[str]) -> str:
+        value = match.group(0)
+        return value if any(token in value for token in ("packed", "align", "aligned")) else ""
+
+    text = _LAYOUT_ATTRIBUTE_RE.sub(keep_layout, text)
+    text = re.sub(r"\bfinal\b", "", text)
+    return _norm(text)
+
+
+def _abi_field(child: Node) -> str:
+    parts: list[str] = []
+    type_node = _field(child, "type")
+    if type_node is not None:
+        parts.append(_semantic_text(_text(type_node)))
+    for nested in child.named_children:
+        if nested is type_node:
+            continue
+        if nested.type in {
+            "field_identifier",
+            "array_declarator",
+            "pointer_declarator",
+            "reference_declarator",
+            "function_declarator",
+            "qualified_identifier",
+        }:
+            parts.append(_semantic_text(_text(nested)))
+        elif nested.type == "bitfield_clause":
+            parts.append(_semantic_text(_text(nested)))
+        elif nested.type in {"type_qualifier", "attribute_declaration", "attribute_specifier"}:
+            text = _semantic_text(_text(nested))
+            if any(token in text for token in ("alignas", "packed", "aligned")):
+                parts.append(text)
+    return "field:" + "|".join(parts)
 
 
 def _abi_record(
-    node: Node, prefix: str, api: dict[str, str], template_params: str = ""
+    node: Node,
+    prefix: str,
+    api: dict[str, str],
+    template_params: str = "",
+    name_override: str = "",
 ) -> None:
-    name = _name(_field(node, "name"))
+    name = name_override or _name(_field(node, "name"))
     if not name:
         return
     parts = [node.type, _record_header(node)]
@@ -543,7 +594,7 @@ def _abi_record(
                     continue
                 if _is_static(child):
                     continue
-                parts.append("field:" + _semantic_text(_text(child)))
+                parts.append(_abi_field(child))
             elif child.type in {"declaration", "function_definition"}:
                 declarator = _field(child, "declarator")
                 if (
@@ -558,14 +609,41 @@ def _abi_record(
 
 
 def _abi_enum(
-    node: Node, prefix: str, api: dict[str, str], template_params: str = ""
+    node: Node,
+    prefix: str,
+    api: dict[str, str],
+    template_params: str = "",
+    name_override: str = "",
 ) -> None:
-    name = _name(_field(node, "name"))
+    name = name_override or _name(_field(node, "name"))
     if name:
         value = "enum:" + _record_header(node)
         if template_params:
             value += ":" + template_params
         api[prefix + name] = value
+
+
+def _abi_typedef(node: Node, prefix: str, api: dict[str, str]) -> None:
+    nested: Node | None = None
+    alias = ""
+    for child in node.named_children:
+        if child.type in {
+            "struct_specifier",
+            "union_specifier",
+            "enum_specifier",
+        } and nested is None:
+            nested = child
+        elif child.type in {"type_identifier", "identifier"}:
+            alias = _name(child)
+    if nested is None or _field(nested, "body") is None:
+        return
+    name = _name(_field(nested, "name")) or alias
+    if not name:
+        return
+    if nested.type == "enum_specifier":
+        _abi_enum(nested, prefix, api, name_override=name)
+    else:
+        _abi_record(nested, prefix, api, name_override=name)
 
 
 def _abi_declarations(container: Node, prefix: str, api: dict[str, str]) -> None:
@@ -574,8 +652,8 @@ def _abi_declarations(container: Node, prefix: str, api: dict[str, str]) -> None
         if kind == "namespace_definition":
             name = _name(_field(child, "name"))
             body = _field(child, "body")
-            if body is not None:
-                _abi_declarations(body, prefix + (name + "::" if name else ""), api)
+            if body is not None and name:
+                _abi_declarations(body, prefix + name + "::", api)
         elif kind == "linkage_specification":
             body = _field(child, "body")
             if body is not None:
@@ -593,6 +671,8 @@ def _abi_declarations(container: Node, prefix: str, api: dict[str, str]) -> None
             _abi_record(child, prefix, api)
         elif kind == "enum_specifier":
             _abi_enum(child, prefix, api)
+        elif kind == "type_definition":
+            _abi_typedef(child, prefix, api)
         elif kind in {"preproc_ifdef", "preproc_if", "preproc_else", "preproc_elif"}:
             _abi_declarations(child, prefix, api)
 

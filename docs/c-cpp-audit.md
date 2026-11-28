@@ -64,8 +64,10 @@ These are diagnostic history findings, not defect labels.
   `.cppm`, and `.mpp`; partition names and `export import` edges are API
   identity, while non-exported declarations stay internal.
 - **ABI:** public record field order, field width, virtual order, enum underlying
-  type, and packing/header attributes form a structural ABI fingerprint. This is
-  target-independent and conservative, not a compiled layout oracle.
+  type, packing/header attributes, and typedef records form a structural ABI
+  fingerprint. Default initializers, deprecation attributes, and anonymous
+  namespaces are excluded. This is target-independent and conservative, not a
+  compiled layout oracle.
 - **googletest:** its own test inventory is large; merge-only history dominates
   many findings.
 - **Post-ADR-0047 smoke:** the 100-commit rerun reports fmt 108, json 124,

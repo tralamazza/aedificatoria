@@ -740,6 +740,8 @@ def check_abi(ctx: Context) -> list[Finding]:
         }
         if not removed and not changed:
             continue
+        if _file_api_finding(ctx, item, valid_adrs) is not None:
+            continue
         severity, message = _abi_severity(ctx, valid_adrs, item.path)
         findings.append(
             Finding(
