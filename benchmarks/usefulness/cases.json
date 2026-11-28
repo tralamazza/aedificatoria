@@ -672,6 +672,108 @@
           "content": "export module math;\nexport int add(int a, int b);\n"
         }
       ]
+    },
+    {
+      "name": "cpp_module_partition_renamed",
+      "description": "Renaming an exported module partition must break its API identity.",
+      "expect": "block",
+      "rules": ["public-api"],
+      "base": {
+        "README.md": "base\n",
+        "src/math_part.ixx": "export module math:part;\nexport int sub(int a, int b);\n"
+      },
+      "changes": [
+        {
+          "op": "write",
+          "path": "src/math_part.ixx",
+          "content": "export module math:detail;\nexport int sub(int a, int b);\n"
+        }
+      ]
+    },
+    {
+      "name": "cpp_module_export_import_removed",
+      "description": "Removing an exported partition linkage must break API.",
+      "expect": "block",
+      "rules": ["public-api"],
+      "base": {
+        "README.md": "base\n",
+        "src/math.ixx": "export module math;\nexport int add(int a, int b);\nexport import :part;\n"
+      },
+      "changes": [
+        {
+          "op": "write",
+          "path": "src/math.ixx",
+          "content": "export module math;\nexport int add(int a, int b);\n"
+        }
+      ]
+    },
+    {
+      "name": "cpp_module_export_import_changed",
+      "description": "Changing an exported partition linkage must break API.",
+      "expect": "block",
+      "rules": ["public-api"],
+      "base": {
+        "README.md": "base\n",
+        "src/math.ixx": "export module math;\nexport int add(int a, int b);\nexport import :part;\n"
+      },
+      "changes": [
+        {
+          "op": "write",
+          "path": "src/math.ixx",
+          "content": "export module math;\nexport int add(int a, int b);\nexport import :detail;\n"
+        }
+      ]
+    },
+    {
+      "name": "cpp_module_export_import_added_is_allowed",
+      "description": "Adding an exported partition linkage must remain allowed.",
+      "expect": "allow",
+      "rules": [],
+      "base": {
+        "README.md": "base\n",
+        "src/math.ixx": "export module math;\nexport int add(int a, int b);\n"
+      },
+      "changes": [
+        {
+          "op": "write",
+          "path": "src/math.ixx",
+          "content": "export module math;\nexport int add(int a, int b);\nexport import :part;\n"
+        }
+      ]
+    },
+    {
+      "name": "cpp_module_import_private_change_is_clean",
+      "description": "Changing a non-exported partition import must not affect API.",
+      "expect": "allow",
+      "rules": [],
+      "base": {
+        "README.md": "base\n",
+        "src/math.ixx": "export module math;\nexport int add(int a, int b);\nimport :part;\n"
+      },
+      "changes": [
+        {
+          "op": "write",
+          "path": "src/math.ixx",
+          "content": "export module math;\nexport int add(int a, int b);\nimport :detail;\n"
+        }
+      ]
+    },
+    {
+      "name": "cpp_module_private_fragment_change_is_clean",
+      "description": "Changing the private module fragment must not affect API.",
+      "expect": "allow",
+      "rules": [],
+      "base": {
+        "README.md": "base\n",
+        "src/math.ixx": "export module math;\nexport int add(int a, int b);\nmodule :private;\nint hidden(int a) { return a; }\n"
+      },
+      "changes": [
+        {
+          "op": "write",
+          "path": "src/math.ixx",
+          "content": "export module math;\nexport int add(int a, int b);\nmodule :private;\nlong hidden(long a) { return a; }\n"
+        }
+      ]
     }
   ]
 }
