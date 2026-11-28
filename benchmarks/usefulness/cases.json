@@ -862,9 +862,9 @@
     },
     {
       "name": "cpp_abi_field_width_changed",
-      "description": "Changing a public field width must break layout ABI.",
+      "description": "Changing a public field width must break ABI; public-api owns this source change.",
       "expect": "block",
-      "rules": ["abi"],
+      "rules": ["public-api"],
       "base": {
         "README.md": "base\n",
         "include/config.h": "struct Config { int count; };\n"
@@ -908,6 +908,74 @@
           "op": "write",
           "path": "include/api.h",
           "content": "struct Config {\n  // Kept for compatibility.\n  int count;\n};\n"
+        }
+      ]
+    },
+    {
+      "name": "cpp_abi_typedef_struct_reordered",
+      "description": "Reordering fields in an anonymous typedef struct must break ABI.",
+      "expect": "block",
+      "rules": ["abi"],
+      "base": {
+        "README.md": "base\n",
+        "include/config.h": "typedef struct { int count; double ratio; } Config;\n"
+      },
+      "changes": [
+        {
+          "op": "write",
+          "path": "include/config.h",
+          "content": "typedef struct { double ratio; int count; } Config;\n"
+        }
+      ]
+    },
+    {
+      "name": "cpp_abi_default_initializer_is_clean",
+      "description": "Changing a default member initializer must not affect ABI.",
+      "expect": "allow",
+      "rules": [],
+      "base": {
+        "README.md": "base\n",
+        "include/config.h": "struct Config { int count = 1; };\n"
+      },
+      "changes": [
+        {
+          "op": "write",
+          "path": "include/config.h",
+          "content": "struct Config { int count = 2; };\n"
+        }
+      ]
+    },
+    {
+      "name": "cpp_abi_deprecated_attribute_is_clean",
+      "description": "Adding a non-layout deprecation attribute must not affect ABI.",
+      "expect": "allow",
+      "rules": [],
+      "base": {
+        "README.md": "base\n",
+        "include/config.h": "struct Config { int count; };\n"
+      },
+      "changes": [
+        {
+          "op": "write",
+          "path": "include/config.h",
+          "content": "struct Config { [[deprecated]] int count; };\n"
+        }
+      ]
+    },
+    {
+      "name": "cpp_abi_anonymous_namespace_is_clean",
+      "description": "Changing an anonymous-namespace record must not affect public ABI.",
+      "expect": "allow",
+      "rules": [],
+      "base": {
+        "README.md": "base\n",
+        "include/api.h": "namespace { struct Internal { int a; double b; }; }\nstruct Public { int value; };\n"
+      },
+      "changes": [
+        {
+          "op": "write",
+          "path": "include/api.h",
+          "content": "namespace { struct Internal { double b; int a; }; }\nstruct Public { int value; };\n"
         }
       ]
     }

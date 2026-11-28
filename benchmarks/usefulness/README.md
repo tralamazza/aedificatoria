@@ -14,7 +14,8 @@ guard prevents useful regressions or that its review cost is acceptable.
 - regression cases for known false positives and false negatives;
 - C/C++ cases for header API, export macros, C test assertions, Unity tests,
   test deletion, include-direction rules, templates, overload sets, concepts,
-  module exports/partitions/linkage, and structural ABI layout changes.
+  module exports/partitions/linkage, and structural ABI layout changes,
+  including typedef records and non-layout edits.
 
 Run:
 
@@ -27,7 +28,7 @@ the change, runs `aed check --json`, and reports case-level precision/recall and
 false-block rate:
 
 ```text
-cases=55 pass=55 tp=36 fn=0 fp=0 tn=19 precision=1.0 recall=1.0 false_block_rate=0.0
+cases=59 pass=59 tp=37 fn=0 fp=0 tn=22 precision=1.0 recall=1.0 false_block_rate=0.0
 ```
 
 CI runs the benchmark with `--gate`; the gate requires recall ≥ 0.9 and a clean
