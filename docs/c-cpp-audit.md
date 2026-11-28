@@ -63,6 +63,9 @@ These are diagnostic history findings, not defect labels.
 - **C++20 modules:** exported declarations/blocks are extracted from `.ixx`,
   `.cppm`, and `.mpp`; partition names and `export import` edges are API
   identity, while non-exported declarations stay internal.
+- **ABI:** public record field order, field width, virtual order, enum underlying
+  type, and packing/header attributes form a structural ABI fingerprint. This is
+  target-independent and conservative, not a compiled layout oracle.
 - **googletest:** its own test inventory is large; merge-only history dominates
   many findings.
 - **Post-ADR-0047 smoke:** the 100-commit rerun reports fmt 108, json 124,
@@ -86,7 +89,8 @@ These are diagnostic history findings, not defect labels.
 - Pinned repositories are not vendored; the runner needs network on first use.
 - Macros/ABI/CMake targets remain shallow or unresolved; template and concept
   checks are declarative, module extraction is export-surface only, partition
-  contents are not merged across units, and none are instantiation-semantic.
+  contents are not merged, ABI is structural rather than compiled, and none are
+  instantiation-semantic.
 
 ## Next depth work
 

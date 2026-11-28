@@ -105,6 +105,12 @@ def syntax_error(
     return None
 
 
+def abi_surface(adapter: Adapter, path: str, text: str | None) -> dict[str, str]:
+    if adapter.name == cfamily.NAME:
+        return cfamily.abi_surface(path, text)
+    return {}
+
+
 def names() -> list[str]:
     return [adapter.name for adapter in ADAPTERS]
 

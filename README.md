@@ -122,6 +122,7 @@ and `evidence` are optional per finding.
 | `forbidden-edge` | error | New `[[aed.forbidden_edges]]` edge. | Remove the edge. |
 | `complexity` | error | New function over `max_complexity`, or existing function growth over `complexity_delta`. | Refactor. |
 | `public-api` | error | Removed/renamed public symbol or changed signature. | Restore compatibility or add an accepted ADR. |
+| `abi` | error | Public record layout, field order/width, packing, enum underlying type, or virtual order changed. | Restore layout compatibility or add an accepted ADR. |
 | `new-dependency` | error | New third-party import not allowlisted. | Reuse a dependency or record an allowlist decision. |
 | `adr-quality` | warn | ADR missing title, status, or `## Decision`. | Fix the ADR. |
 
@@ -329,7 +330,10 @@ macro expansion, and ABI are not resolved. With cargo installed and a root `Carg
 - C/C++ uses header declarations as API. Template parameters, overload sets,
   concepts, and module partition/export-import identity are structural; modules
   expose only their exported surface and partition contents are not merged.
-  Macros are not expanded, ABI is not checked, and CMake targets/dependencies
+  ABI checks cover record field/virtual order, enum underlying type, packing
+  attributes, and field addition/width; they are target-independent and do not
+  resolve calling conventions, name mangling, target layout, or macro visibility.
+  Macros are not expanded, ABI is not compiled, and CMake targets/dependencies
   are not parsed; package edges use directory components and local quoted
   includes.
 
