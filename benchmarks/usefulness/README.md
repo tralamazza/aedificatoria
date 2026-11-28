@@ -13,7 +13,8 @@ guard prevents useful regressions or that its review cost is acceptable.
 - clean cases that must remain `allow`;
 - regression cases for known false positives and false negatives;
 - C/C++ cases for header API, export macros, C test assertions, Unity tests,
-  test deletion, include-direction rules, templates, and overload sets.
+  test deletion, include-direction rules, templates, overload sets, concepts,
+  and module exports.
 
 Run:
 
@@ -26,7 +27,7 @@ the change, runs `aed check --json`, and reports case-level precision/recall and
 false-block rate:
 
 ```text
-cases=32 pass=32 tp=23 fn=0 fp=0 tn=9 precision=1.0 recall=1.0 false_block_rate=0.0
+cases=41 pass=41 tp=27 fn=0 fp=0 tn=14 precision=1.0 recall=1.0 false_block_rate=0.0
 ```
 
 CI runs the benchmark with `--gate`; the gate requires recall ≥ 0.9 and a clean
