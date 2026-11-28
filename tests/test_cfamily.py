@@ -146,3 +146,25 @@ def test_cpp_test_includes_are_not_dependencies(tmp_path: Path):
     config = Config()
     assert "gtest" not in cfamily.project_imports(tmp_path, config)
     assert cfamily.local_packages(tmp_path, config) == set()
+
+
+def test_c_header_with_guard_and_export_macro_is_api():
+    source = """
+#ifndef API_H
+#define API_H
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#define API_EXPORT(type) type
+API_EXPORT(int) add(int x, int y);
+
+#ifdef __cplusplus
+}
+#endif
+#endif
+"""
+    tree = cfamily.parse_text("include/api.h", source)
+    assert tree is not None
+    api = cfamily.public_api(tree)
+    assert "add" in api
