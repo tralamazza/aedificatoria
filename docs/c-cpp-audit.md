@@ -80,7 +80,6 @@ These are diagnostic history findings, not defect labels.
 
 ## Next depth work
 
-1. Add targeted C/C++ mutation cases for API macro declarations and include
-   direction using these real headers.
-2. Consider CMake target/include metadata as the next hermetic layer.
-3. Add C/C++ mutation cases and precision/recall labels before libclang.
+1. Consider CMake target/include metadata as the next hermetic layer.
+2. Add broader C/C++ mutation cases (templates/overloads) before libclang.
+3. Keep the mutation benchmark's C/C++ cases aligned with audit discoveries.
