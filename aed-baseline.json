@@ -293,7 +293,7 @@
       "_collect_scores": 12,
       "_collect_tests": 13,
       "_component": 11,
-      "_declarations": 8,
+      "_declarations": 9,
       "_declarations_one": 6,
       "_error_count": 3,
       "_field": 2,
@@ -778,6 +778,7 @@
     },
     "tests/test_cfamily.py": {
       "test_c_header_api_excludes_static_and_includes_struct_fields": 6,
+      "test_c_header_with_guard_and_export_macro_is_api": 2,
       "test_c_public_api_break": 1,
       "test_cpp_complexity": 2,
       "test_cpp_external_include_is_new_dependency": 1,

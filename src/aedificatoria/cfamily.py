@@ -251,6 +251,8 @@ def _declarations(container: Node, prefix: str, api: dict[str, str]) -> None:
             _add_aggregate(child, prefix, api)
         elif kind == "type_definition":
             _typedef_declaration(child, prefix, api)
+        elif kind in {"preproc_ifdef", "preproc_if", "preproc_else", "preproc_elif"}:
+            _declarations(child, prefix, api)
 
 
 def _declarations_one(node: Node, prefix: str, api: dict[str, str]) -> None:
@@ -303,7 +305,15 @@ def _collect_scores(container: Node, prefix: str, scores: dict[str, int]) -> Non
             body = _field(child, "body")
             if name and body is not None:
                 scores[prefix + name] = 1 + _branches(body)
-        elif child.type in {"declaration_list", "field_declaration_list", "linkage_specification"}:
+        elif child.type in {
+            "declaration_list",
+            "field_declaration_list",
+            "linkage_specification",
+            "preproc_ifdef",
+            "preproc_if",
+            "preproc_else",
+            "preproc_elif",
+        }:
             _collect_scores(child, prefix, scores)
 
 
@@ -403,6 +413,10 @@ def _collect_tests(
             "declaration_list",
             "class_specifier",
             "struct_specifier",
+            "preproc_ifdef",
+            "preproc_if",
+            "preproc_else",
+            "preproc_elif",
         }:
             _collect_tests(child, prefix, functions, skips, counts)
 
