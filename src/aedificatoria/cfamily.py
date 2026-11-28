@@ -25,7 +25,7 @@ _C_EXT = frozenset({".c", ".h"})
 _CPP_EXT = frozenset({".cc", ".cpp", ".cxx", ".hpp", ".hh", ".hxx", ".ixx"})
 _GTEST = frozenset({"TEST", "TEST_F", "TEST_P", "TYPED_TEST", "TYPED_TEST_P"})
 _CATCH = frozenset({"TEST_CASE", "SCENARIO"})
-_ASSERTIONS = ("EXPECT_", "ASSERT_", "REQUIRE", "CHECK", "FAIL")
+_ASSERTIONS = ("EXPECT_", "ASSERT", "REQUIRE", "CHECK", "FAIL", "TEST_ASSERT")
 _STDLIB = frozenset(
     {
         "algorithm", "any", "array", "atomic", "bitset", "cassert", "cctype",
@@ -372,28 +372,81 @@ def _test_call(node: Node) -> tuple[str, str] | None:
     return None
 
 
+def _test_impl_name(node: Node) -> str:
+    match = re.match(r"TEST_IMPL\s*\(\s*([A-Za-z_]\w*)", _text(node))
+    return match.group(1) if match else ""
+
+
+def _run_test_name(node: Node) -> str:
+    if node.type != "expression_statement":
+        return ""
+    for child in node.named_children:
+        if child.type != "call_expression":
+            continue
+        if _call_name(_field(child, "function")) != "RUN_TEST":
+            continue
+        arguments = _field(child, "arguments")
+        if arguments is None:
+            return ""
+        for argument in arguments.named_children:
+            if argument.type in {"identifier", "field_identifier"}:
+                return _text(argument)
+    return ""
+
+
+def _record_test_definition(
+    child: Node,
+    prefix: str,
+    functions: set[str],
+    skips: set[str],
+    counts: dict[str, int],
+    bodies: dict[str, Node],
+) -> bool:
+    if child.type != "function_definition":
+        return False
+    name = _name(_field(child, "declarator"))
+    impl = _test_impl_name(child)
+    if impl:
+        key = f"{prefix}{impl}"
+        functions.add(key)
+        counts[key] = _assertions(_field(child, "body") or child)
+        return True
+    if name in _GTEST:
+        title = _gtest_title(child)
+        key = f"{prefix}{title}" if title else f"{prefix}{name}"
+        functions.add(key)
+        counts[key] = _assertions(_field(child, "body") or child)
+        if "DISABLED_" in title:
+            skips.add(key)
+        return True
+    body = _field(child, "body")
+    if body is not None:
+        bodies[name] = body
+        _collect_tests(body, prefix, functions, skips, counts, bodies)
+    return False
+
+
 def _collect_tests(
     container: Node,
     prefix: str,
     functions: set[str],
     skips: set[str],
     counts: dict[str, int],
+    bodies: dict[str, Node],
 ) -> None:
     children = container.named_children
     index = 0
     while index < len(children):
         child = children[index]
         index += 1
-        if child.type == "function_definition":
-            name = _name(_field(child, "declarator"))
-            if name in _GTEST:
-                title = _gtest_title(child)
-                key = f"{prefix}{title}" if title else f"{prefix}{name}"
-                functions.add(key)
-                counts[key] = _assertions(_field(child, "body") or child)
-                if "DISABLED_" in title:
-                    skips.add(key)
-                continue
+        if _record_test_definition(child, prefix, functions, skips, counts, bodies):
+            continue
+        run_test = _run_test_name(child)
+        if run_test:
+            key = f"{prefix}{run_test}"
+            functions.add(key)
+            counts[key] = _assertions(bodies.get(run_test, child))
+            continue
         call = _test_call(child)
         if call is not None and index < len(children):
             name, title = call
@@ -418,7 +471,7 @@ def _collect_tests(
             "preproc_else",
             "preproc_elif",
         }:
-            _collect_tests(child, prefix, functions, skips, counts)
+            _collect_tests(child, prefix, functions, skips, counts, bodies)
 
 
 def test_info(tree: CFile | None) -> TestInfo:
@@ -427,7 +480,8 @@ def test_info(tree: CFile | None) -> TestInfo:
     functions: set[str] = set()
     skips: set[str] = set()
     counts: dict[str, int] = {}
-    _collect_tests(tree.tree.root_node, "", functions, skips, counts)
+    bodies: dict[str, Node] = {}
+    _collect_tests(tree.tree.root_node, "", functions, skips, counts, bodies)
     return TestInfo(frozenset(functions), sum(counts.values()), frozenset(skips), counts)
 
 

@@ -14,35 +14,35 @@ The adapter now recurses into `preproc_ifdef`, `preproc_if`, `preproc_else`, and
 
 | Repository | Language | Window | Time | Findings | Commits with findings |
 |---|---|---|---:|---:|---:|
-| `fmtlib/fmt` | C++ | 100 commits | 38.3s | 70 | 31 |
+| `fmtlib/fmt` | C++ | 100 commits | 18.5s | 64 | 26 |
 | `nlohmann/json` | C++ | 100 commits | 32.8s | 58 | 16 |
-| `libuv/libuv` | C | 100 commits | 22.4s | 94 | 39 |
-| `google/googletest` | C++ | 100 commits | 26.4s | 154 | 25 |
-| `DaveGamble/cJSON` | C | 100 commits | 4.2s | 72 | 25 |
+| `libuv/libuv` | C | 100 commits | 13.0s | 75 | 31 |
+| `google/googletest` | C++ | 100 commits | 21.5s | 153 | 24 |
+| `DaveGamble/cJSON` | C | 100 commits | 4.2s | 74 | 26 |
 
-All five runs exited successfully. Total wall time was ~124s with `--jobs 4`.
+All five runs exited successfully. Total wall time was ~90s with `--jobs 4`.
 
-The commit-with-findings values above reflect the post-fix rerun; findings rose
-because declarations and tests inside conditional preprocessor blocks were
-previously invisible.
+These values reflect the post-fix rerun after both preprocessor and C test-layout
+fixes. Test files are now classified correctly, so less test code leaks into
+complexity/API metrics and some finding counts dropped.
 
 ## Latest metrics
 
 | Repository | Public API symbols | Complexity functions | Dependencies | Package edges | Tests | Assertions |
 |---|---:|---:|---:|---:|---:|---:|
-| fmt | 778 | 2,787 | 43 | 3 | 679 | 2,901 |
+| fmt | 472 | 815 | 21 | 2 | 679 | 2,901 |
 | json | 476 | 1,990 | 17 | 0 | 504 | 12,654 |
-| libuv | 993 | 11,581 | 84 | 24 | 0 | 0 |
-| googletest | 1,061 | 2,778 | 28 | 1 | 2,289 | 5,161 |
-| cJSON | 105 | 956 | 0 | 3 | 0 | 0 |
+| libuv | 969 | 8,254 | 78 | 19 | 481 | 3,496 |
+| googletest | 646 | 1,860 | 28 | 0 | 2,289 | 5,161 |
+| cJSON | 105 | 940 | 0 | 2 | 225 | 447 |
 
 ## Signals
 
 - **cJSON:** public API extraction is now non-zero (105 symbols at tip), up from
-  zero. The include guard and export macro are handled by preprocessor recursion;
-  its C tests remain unrecognized because of the `test/*.c` layout.
-- **libuv:** C API/complexity/edge extraction is strong, but its tests remain
-  unrecognized for the same C test-layout reason.
+  zero. Include guards, export macros, `RUN_TEST`, and `TEST_ASSERT` inventory
+  now work; 225 tests and 447 assertions are recognized.
+- **libuv:** C API/complexity/edge extraction is strong. `TEST_IMPL` inventory now
+  finds 481 tests and 3,496 assertions.
 - **fmt/json:** header-heavy C++ libraries expose substantial API/complexity/test
   activity; templates are structural only.
 - **googletest:** its own test inventory is large; merge-only history dominates
@@ -65,7 +65,7 @@ previously invisible.
 
 ## Next depth work
 
-1. Add common C test layouts (`test/`, `test-*.c`) or explicit CTest inventory.
-2. Add targeted mutation cases for C/C++ API macro declarations and include
+1. Add targeted C/C++ mutation cases for API macro declarations and include
    direction using these real headers.
-3. Measure a 1,000-commit window before considering CMake/libclang depth.
+2. Measure a 1,000-commit window before considering CMake/libclang depth.
+3. Consider CMake target/include metadata as the next hermetic layer.

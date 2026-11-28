@@ -168,3 +168,29 @@ API_EXPORT(int) add(int x, int y);
     assert tree is not None
     api = cfamily.public_api(tree)
     assert "add" in api
+
+
+def test_c_test_layouts_and_plain_c_inventory():
+    config = Config()
+    assert config.is_test("test/test-active.c")
+    assert config.is_test("tests/cjson_add.c")
+    assert config.is_test("test.c")
+
+    libuv = cfamily.parse_text(
+        "test/test-active.c",
+        "TEST_IMPL(active) {\n  ASSERT_OK(1);\n}\n",
+    )
+    assert libuv is not None
+    info = cfamily.test_info(libuv)
+    assert "active" in info.functions
+    assert info.assertions == 1
+
+    unity = cfamily.parse_text(
+        "tests/cjson_add.c",
+        "static void add_works(void) { TEST_ASSERT_NOT_NULL(0); }\n"
+        "int main(void) { RUN_TEST(add_works); }\n",
+    )
+    assert unity is not None
+    info = cfamily.test_info(unity)
+    assert "add_works" in info.functions
+    assert info.assertions == 1

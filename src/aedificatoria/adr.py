@@ -30,8 +30,11 @@ source_roots = ["src", "."]
 #   "tests/**", "**/tests/**", "**/test_*.py", "**/*_test.py",
 #   "**/*_test.rs", "**/*_tests.rs", "**/*.test.*", "**/*.spec.*",
 #   "**/__tests__/**", "**/__test__/**",
-#   "**/test_*.c", "**/*_test.c", "**/test_*.cc", "**/*_test.cc",
-#   "**/test_*.cpp", "**/*_test.cpp", "**/test_*.cxx", "**/*_test.cxx",
+#   "test/**", "**/test/**",
+#   "**/test_*.c", "**/*_test.c", "**/test-*.c", "**/test.c", "**/test.cpp",
+#   "**/test_*.cc", "**/*_test.cc", "**/test-*.cc",
+#   "**/test_*.cpp", "**/*_test.cpp", "**/test-*.cpp",
+#   "**/test_*.cxx", "**/*_test.cxx", "**/test-*.cxx",
 # ]
 # test_config_paths = [
 #   "conftest.py", "**/conftest.py", "pytest.ini", "tox.ini", "setup.cfg",
