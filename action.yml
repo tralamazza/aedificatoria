@@ -1,0 +1,193 @@
+name: aedificatoria
+description: Deterministic architecture guard for diffs
+author: Daniel Tralamazza
+branding:
+  icon: shield
+  color: blue
+
+inputs:
+  version:
+    description: PyPI version to run, or "source" to install this action's checkout
+    required: false
+    default: ""
+  base:
+    description: Explicit base revision or SHA; defaults to the event base
+    required: false
+    default: ""
+  path:
+    description: Repository or project directory to check
+    required: false
+    default: "."
+  config:
+    description: Config path; defaults to aed.toml when present
+    required: false
+    default: ""
+  strict:
+    description: Fail the step when the verdict is review (warnings)
+    required: false
+    default: "false"
+  enforce:
+    description: Set false for shadow mode; report findings without failing
+    required: false
+    default: "true"
+  annotations:
+    description: Emit GitHub Actions annotations for findings
+    required: false
+    default: "true"
+  summary:
+    description: Append a Markdown report to the job summary
+    required: false
+    default: "true"
+  json-out:
+    description: Path for the JSON report; defaults to aed.json under RUNNER_TEMP
+    required: false
+    default: ""
+
+outputs:
+  verdict:
+    description: allow, review, or block
+    value: ${{ steps.check.outputs.verdict }}
+  exit-code:
+    description: aed exit code before enforce is applied
+    value: ${{ steps.check.outputs.exit-code }}
+  base:
+    description: Resolved base commit
+    value: ${{ steps.check.outputs.base }}
+  errors:
+    description: Number of error findings
+    value: ${{ steps.check.outputs.errors }}
+  warnings:
+    description: Number of warning findings
+    value: ${{ steps.check.outputs.warnings }}
+  infos:
+    description: Number of informational findings
+    value: ${{ steps.check.outputs.infos }}
+  json:
+    description: Absolute path to the JSON report
+    value: ${{ steps.check.outputs.json }}
+
+runs:
+  using: composite
+  steps:
+    - name: Select Python
+      id: python
+      shell: bash
+      run: |
+        set -euo pipefail
+        exe=""
+        for candidate in python python3; do
+          if command -v "$candidate" >/dev/null 2>&1 && \
+             "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)' 2>/dev/null; then
+            exe="$candidate"
+            break
+          fi
+        done
+        echo "exe=$exe" >> "$GITHUB_OUTPUT"
+
+    - name: Set up Python
+      if: steps.python.outputs.exe == ''
+      uses: actions/setup-python@v7
+      with:
+        python-version: "3.12"
+
+    - name: Install aedificatoria
+      id: install
+      shell: bash
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
+        ACTION_PATH: ${{ github.action_path }}
+      run: |
+        set -euo pipefail
+        py="${{ steps.python.outputs.exe }}"
+        if [ -z "$py" ]; then py=python; fi
+        version="$INPUT_VERSION"
+        if [ -z "$version" ]; then
+          version="$("$py" -c 'import sys, tomllib; print(tomllib.load(open(sys.argv[1], "rb"))["project"]["version"])' "$ACTION_PATH/pyproject.toml")"
+        fi
+        if [ "$version" = "source" ]; then
+          "$py" -m pip install --disable-pip-version-check --quiet "$ACTION_PATH"
+        else
+          "$py" -m pip install --disable-pip-version-check --quiet "aedificatoria==$version"
+        fi
+        echo "exe=$py" >> "$GITHUB_OUTPUT"
+        echo "version=$version" >> "$GITHUB_OUTPUT"
+        echo "aedificatoria $version (python: $py)"
+
+    - name: Resolve base
+      id: base
+      shell: bash
+      env:
+        INPUT_BASE: ${{ inputs.base }}
+        INPUT_PATH: ${{ inputs.path }}
+        DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        EVENT_PATH: ${{ github.event_path }}
+      run: |
+        set -euo pipefail
+        py="${{ steps.install.outputs.exe }}"
+        base="$("$py" -m aedificatoria._action resolve-base \
+          --path "$INPUT_PATH" \
+          --event "$EVENT_PATH" \
+          --base "$INPUT_BASE" \
+          --default-branch "$DEFAULT_BRANCH" \
+          --remote origin)"
+        echo "base=$base" >> "$GITHUB_OUTPUT"
+        echo "base: $base"
+
+    - name: Check
+      id: check
+      shell: bash
+      env:
+        INPUT_PATH: ${{ inputs.path }}
+        INPUT_CONFIG: ${{ inputs.config }}
+        INPUT_STRICT: ${{ inputs.strict }}
+        INPUT_ENFORCE: ${{ inputs.enforce }}
+        INPUT_ANNOTATIONS: ${{ inputs.annotations }}
+        INPUT_SUMMARY: ${{ inputs.summary }}
+        INPUT_JSON_OUT: ${{ inputs.json-out }}
+        BASE: ${{ steps.base.outputs.base }}
+      run: |
+        set -euo pipefail
+        py="${{ steps.install.outputs.exe }}"
+        json="${INPUT_JSON_OUT:-${RUNNER_TEMP:-$PWD}/aed.json}"
+        args=(check --path "$INPUT_PATH" --base "$BASE" --json-out "$json")
+        if [ -n "$INPUT_CONFIG" ]; then
+          args+=(--config "$INPUT_CONFIG")
+        fi
+        if [ "$INPUT_STRICT" = "true" ]; then
+          args+=(--strict)
+        fi
+        if [ "$INPUT_ANNOTATIONS" = "true" ]; then
+          args+=(--github-annotations)
+        fi
+        if [ "$INPUT_SUMMARY" = "true" ] && [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+          args+=(--summary "$GITHUB_STEP_SUMMARY")
+        fi
+        rm -f -- "$json"
+        set +e
+        "$py" -m aedificatoria "${args[@]}"
+        code=$?
+        set -e
+        if [ -f "$json" ]; then
+          "$py" -m aedificatoria._action outputs \
+            --json "$json" --exit-code "$code" --output "$GITHUB_OUTPUT"
+        else
+          {
+            echo "verdict=error"
+            echo "exit-code=$code"
+            echo "base=$BASE"
+            echo "errors=0"
+            echo "warnings=0"
+            echo "infos=0"
+            echo "json="
+          } >> "$GITHUB_OUTPUT"
+          echo "::error title=aedificatoria::aed could not produce a report (exit $code); see the log"
+          exit "$code"
+        fi
+        if [ "$INPUT_ENFORCE" != "true" ]; then
+          if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+            printf '\n> Shadow mode: findings are reported but not enforced.\n' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "aed: shadow mode (enforce=false); not failing"
+          exit 0
+        fi
+        exit "$code"

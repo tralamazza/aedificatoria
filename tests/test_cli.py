@@ -219,3 +219,71 @@ def test_cli_fail_on_warn_config(repo: Path, commit, write, capsys):
 
     assert main(["check", "--path", str(repo)]) == 1
     assert "test-config" in capsys.readouterr().out
+
+
+def test_cli_writes_json_and_summary(repo: Path, commit, write, capsys, tmp_path: Path):
+    write(repo, "README.md", "base\n")
+    commit(repo)
+    write(repo, "migrations/0001_init.sql", "create table t;\n")
+    report = tmp_path / "aed.json"
+    summary = tmp_path / "summary.md"
+
+    code = main(
+        [
+            "check",
+            "--path",
+            str(repo),
+            "--json-out",
+            str(report),
+            "--summary",
+            str(summary),
+        ]
+    )
+
+    assert code == 2
+    payload = json.loads(report.read_text(encoding="utf-8"))
+    assert payload["verdict"] == "block"
+    assert any(item["rule"] == "one-way-door" for item in payload["findings"])
+    text = summary.read_text(encoding="utf-8")
+    assert "## Aedificatoria: BLOCK" in text
+    assert "one-way-door" in text
+    assert "VERDICT: BLOCK" in capsys.readouterr().out
+
+
+def test_cli_github_annotations(repo: Path, commit, write, capsys):
+    write(repo, "README.md", "base\n")
+    commit(repo)
+    write(repo, "migrations/0001_init.sql", "create table t;\n")
+
+    assert main(["check", "--path", str(repo), "--github-annotations"]) == 2
+    out = capsys.readouterr().out
+    assert "::error title=aed%3A one-way-door,file=migrations/0001_init.sql" in out
+    assert "VERDICT: BLOCK" in out
+
+
+def test_cli_rejects_json_with_annotations(repo: Path, capsys):
+    assert main(["check", "--path", str(repo), "--json", "--github-annotations"]) == 2
+    assert "--json-out" in capsys.readouterr().err
+
+
+def test_cli_init_github_and_baseline(repo: Path, write, commit, capsys):
+    from aedificatoria import __version__
+
+    write(repo, "src/app.py", "answer = 42\n")
+    commit(repo)
+
+    assert main(["init", "--github", "--baseline", "--path", str(repo)]) == 0
+    workflow = repo / ".github" / "workflows" / "aed.yml"
+    assert workflow.is_file()
+    text = workflow.read_text(encoding="utf-8")
+    assert f"tralamazza/aedificatoria@v{__version__}" in text
+    assert "merge_group:" in text
+    assert (repo / "aed-baseline.json").is_file()
+    output = capsys.readouterr().out
+    assert "created  .github/workflows/aed.yml" in output
+    assert "created  aed-baseline.json" in output
+
+    assert main(["init", "--github", "--baseline", "--path", str(repo)]) == 0
+    output = capsys.readouterr().out
+    assert "exists   .github/workflows/aed.yml" in output
+    assert "exists   aed-baseline.json" in output

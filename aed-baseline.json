@@ -3,7 +3,10 @@
     "src/aedificatoria/adr.py": {
       "CONFIG_TEMPLATE": "const",
       "FIRST_ADR": "const",
+      "WORKFLOW_PATH": "const",
+      "WORKFLOW_TEMPLATE": "const",
       "create_adr": "(root:Path,title:str,*,status:str='proposed',config:Config|None=None)->Path",
+      "init_github_workflow": "(root:Path,version:str)->tuple[Path,bool]",
       "init_project": "(root:Path)->tuple[list[Path],list[Path]]",
       "slugify": "(title:str)->str"
     },
@@ -217,9 +220,12 @@
       "test_info": "(tree:ast.Module|None)->TestInfo"
     },
     "src/aedificatoria/report.py": {
+      "REMEDIES": "const",
       "counts": "(findings:list[Finding])->dict[str,int]",
       "exit_code": "(findings:list[Finding],*,strict:bool=False)->int",
       "json_payload": "(findings:list[Finding],base_commit:str,changed:list[ChangedFile])->dict[str,Any]",
+      "render_annotations": "(findings:list[Finding])->str",
+      "render_summary": "(findings:list[Finding],base_commit:str,changed:list[ChangedFile])->str",
       "render_text": "(findings:list[Finding],base_commit:str,changed:list[ChangedFile])->str",
       "safe_text": "(value:str)->str",
       "verdict": "(findings:list[Finding])->str"
@@ -249,9 +255,29 @@
     }
   },
   "complexity": {
+    "src/aedificatoria/_action.py": {
+      "_cmd_outputs": 7,
+      "_cmd_resolve_base": 1,
+      "_commit": 3,
+      "_deepen_branch": 1,
+      "_fetch_branch": 1,
+      "_fetch_commit": 1,
+      "_git": 2,
+      "_merge_base": 2,
+      "_output_value": 1,
+      "_parent": 2,
+      "_read_event": 5,
+      "_resolve_commit": 7,
+      "_resolve_fallback": 11,
+      "_valid_ref": 5,
+      "event_base": 9,
+      "main": 3,
+      "resolve_base": 7
+    },
     "src/aedificatoria/adr.py": {
       "_next_number": 3,
       "create_adr": 5,
+      "init_github_workflow": 4,
       "init_project": 7,
       "slugify": 2
     },
@@ -394,17 +420,22 @@
     },
     "src/aedificatoria/cli.py": {
       "_add_path": 1,
+      "_append_text": 3,
+      "_emit_reports": 6,
       "_history_github": 5,
       "_history_gitlab": 5,
+      "_init_baseline": 3,
       "_project_root": 2,
+      "_record": 2,
       "_run_check": 1,
+      "_validate_report_args": 8,
       "build_parser": 1,
       "cmd_adr_new": 1,
       "cmd_baseline": 4,
       "cmd_check": 10,
       "cmd_doctor": 3,
       "cmd_history": 8,
-      "cmd_init": 3,
+      "cmd_init": 6,
       "cmd_rules": 8,
       "main": 16
     },
@@ -699,9 +730,14 @@
       "test_info": 2
     },
     "src/aedificatoria/report.py": {
+      "_annotation": 3,
+      "_annotation_escape": 2,
+      "_summary_cell": 1,
       "counts": 7,
       "exit_code": 4,
       "json_payload": 4,
+      "render_annotations": 7,
+      "render_summary": 10,
       "render_text": 8,
       "safe_text": 1,
       "verdict": 5
@@ -782,6 +818,21 @@
     },
     "src/aedificatoria/rust.py": {
       "test_info": 0
+    },
+    "tests/test_action.py": {
+      "test_annotations_cap_errors": 2,
+      "test_annotations_escape_and_rank": 3,
+      "test_event_base_prefers_merge_group_and_pr": 4,
+      "test_outputs_missing_report_returns_two": 1,
+      "test_outputs_writes_step_outputs": 6,
+      "test_resolve_base_explicit_branch_fetches": 2,
+      "test_resolve_base_explicit_commit": 1,
+      "test_resolve_base_fetches_event_commit": 2,
+      "test_resolve_base_merge_base_fallback": 1,
+      "test_resolve_base_rejects_option_like_input": 1,
+      "test_resolve_base_without_remote_raises": 1,
+      "test_summary_clean": 2,
+      "test_summary_has_verdict_remedy_and_escaping": 3
     },
     "tests/test_baseline.py": {
       "test_baseline_blocks_api_growth": 2,
@@ -868,13 +919,17 @@
       "test_cli_doctor_reports_missing_required": 3,
       "test_cli_explicit_missing_config_returns_two": 2,
       "test_cli_fail_on_warn_config": 2,
+      "test_cli_github_annotations": 3,
       "test_cli_init_and_adr": 7,
+      "test_cli_init_github_and_baseline": 10,
       "test_cli_malformed_config_returns_two": 3,
+      "test_cli_rejects_json_with_annotations": 2,
       "test_cli_staged_checks_index_not_worktree": 4,
       "test_cli_staged_checks_staged_config": 3,
       "test_cli_staged_honors_hook_index": 2,
       "test_cli_strict_warning_exit_codes": 2,
       "test_cli_subdir_commands_use_repository_root": 8,
+      "test_cli_writes_json_and_summary": 6,
       "test_doctor_optional_missing_is_not_a_failure": 2,
       "test_report_escapes_terminal_controls": 1
     },

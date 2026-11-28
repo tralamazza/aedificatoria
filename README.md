@@ -91,7 +91,7 @@ read-only, and makes no network calls.
 | `aed history --gitlab-mr N --repo GROUP/PROJECT` | Audit a GitLab MR via `glab`. |
 | `aed adr new TITLE [--status proposed]` | Create a numbered ADR. |
 | `aed rules` | Print effective config and thresholds. |
-| `aed init` | Create `aed.toml` and the first ADR. |
+| `aed init [--github] [--baseline]` | Create `aed.toml` and the first ADR; optionally the GitHub workflow and baseline. |
 
 ## Output contract
 
@@ -106,6 +106,12 @@ Text findings include severity, rule, path, message, and optional evidence.
 
 Agents should consume `verdict` and `findings`, not parse text. `path`, `line`,
 and `evidence` are optional per finding.
+
+`--json-out PATH` writes the same payload to a file without changing stdout.
+`--summary PATH` appends a Markdown report (use `$GITHUB_STEP_SUMMARY`), and
+`--github-annotations` emits GitHub Actions workflow commands, worst findings
+first. `--json` and `--github-annotations` cannot be combined because both use
+stdout.
 
 ## Rules
 
@@ -247,28 +253,43 @@ Harness policy:
 - Exit `2` also covers CLI/git/config errors, so parse the JSON rather than
   treating every failure as a finding.
 
-### CI
+### GitHub Actions
 
 ```yaml
-- uses: actions/checkout@v7
-  with:
-    fetch-depth: 0
-- uses: actions/setup-python@v7
-  with:
-    python-version: "3.11"
-- run: pip install -e .
-- name: Guard
-  env:
-    BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
-  run: aed check --base "$BASE" --json > aed.json
+permissions:
+  contents: read
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: tralamazza/aedificatoria@v0.1.7
 ```
 
-- `fetch-depth: 0` is required so `--base` is resolvable.
-- This repository installs the guard with `pip install -e .`. In another project,
-  replace that line with a pinned `aedificatoria` package/commit install.
+The action resolves the base from the event (`pull_request.base.sha`,
+`merge_group.base_sha`, or `push.before`), fetches only that commit, and fails
+closed when no base resolves. `fetch-depth: 0` is not required. It writes a job
+summary, inline annotations, and `aed.json`, and exposes `verdict`, `exit-code`,
+and counts as outputs. Use `strict: true` to fail on warnings and `enforce: false`
+for shadow mode. Full reference: [`docs/github-action.md`](docs/github-action.md).
+
+`aed init --github --baseline` writes this workflow pinned to the installed
+release and creates the first baseline.
+
+### Manual CI invocation
+
+Any CI system can run the CLI directly:
+
+```yaml
+- run: aed check --base "$BASE" --json-out aed.json --summary "$GITHUB_STEP_SUMMARY"
+```
+
+- `--base` must point at a commit that exists in the checkout. `aed check`
+  defaults to `HEAD`, which is an empty diff; resolve the event base yourself or
+  fetch it (`git fetch --depth=1 origin "$BASE"` is enough).
 - If the event base is missing or the zero SHA, resolve
-  `git merge-base HEAD origin/main`; the repository workflow does this and the
-  HEAD~1 fallback already: [`.github/workflows/aed.yml`](.github/workflows/aed.yml).
+  `git merge-base HEAD origin/main`; `--base HEAD~1` is the last-resort fallback
+  when history is available.
 - CI uses working-tree mode. `--staged` is for pre-commit.
 - `review` exits `0` by default. Set `fail_on_warn = true` in `[aed]` or pass
   `aed check --strict` to exit `1` for warnings; errors still exit `2`.

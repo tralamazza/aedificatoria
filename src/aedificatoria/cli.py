@@ -14,7 +14,13 @@ from .config import Config, ConfigError, load_config
 from .git import GitError, base_worktree, changed_files, index_tree, repo_root, resolve_commit
 from .model import ChangedFile, Context
 from .paths import ConfinedPathError
-from .report import exit_code, json_payload, render_text
+from .report import (
+    exit_code,
+    json_payload,
+    render_annotations,
+    render_summary,
+    render_text,
+)
 
 
 def _add_path(parser: argparse.ArgumentParser) -> None:
@@ -48,6 +54,23 @@ def build_parser() -> argparse.ArgumentParser:
     )
     check.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
     check.add_argument(
+        "--json-out",
+        default=None,
+        metavar="PATH",
+        help="Write the JSON report to PATH without changing stdout",
+    )
+    check.add_argument(
+        "--summary",
+        default=None,
+        metavar="PATH",
+        help="Append a Markdown summary to PATH (for example $GITHUB_STEP_SUMMARY)",
+    )
+    check.add_argument(
+        "--github-annotations",
+        action="store_true",
+        help="Emit GitHub Actions annotations (workflow commands) on stdout",
+    )
+    check.add_argument(
         "--strict",
         action="store_true",
         help="Exit 1 when the verdict is review (warnings)",
@@ -55,6 +78,16 @@ def build_parser() -> argparse.ArgumentParser:
 
     init = sub.add_parser("init", help="Create aed.toml and the first ADR")
     _add_path(init)
+    init.add_argument(
+        "--github",
+        action="store_true",
+        help="Write .github/workflows/aed.yml using this action",
+    )
+    init.add_argument(
+        "--baseline",
+        action="store_true",
+        help="Write the metric baseline after creating the config",
+    )
 
     baseline_cmd = sub.add_parser("baseline", help="Write the persistent metric baseline")
     _add_path(baseline_cmd)
@@ -138,7 +171,67 @@ def _run_check(
         return run_checks(context)
 
 
+def _validate_report_args(args: argparse.Namespace) -> int:
+    if args.json and args.github_annotations:
+        print(
+            "aed: --json and --github-annotations both write to stdout; use --json-out",
+            file=sys.stderr,
+        )
+        return 2
+    for flag, value in (("--json-out", args.json_out), ("--summary", args.summary)):
+        if not value:
+            continue
+        target = Path(value)
+        if target.exists() and target.is_dir():
+            print(f"aed: {flag} target is a directory: {value}", file=sys.stderr)
+            return 2
+        if not target.parent.is_dir():
+            print(
+                f"aed: {flag} parent directory does not exist: {target.parent}",
+                file=sys.stderr,
+            )
+            return 2
+    return 0
+
+
+def _append_text(path: str, text: str) -> None:
+    target = Path(path)
+    if target.exists() and target.stat().st_size > 0:
+        text = "\n" + text
+    with target.open("a", encoding="utf-8") as handle:
+        handle.write(text)
+
+
+def _emit_reports(
+    args: argparse.Namespace,
+    findings,
+    commit: str,
+    changed,
+    *,
+    strict: bool,
+) -> int:
+    payload = json_payload(findings, commit, changed)
+    if args.json_out:
+        Path(args.json_out).write_text(
+            json.dumps(payload, indent=2) + "\n", encoding="utf-8"
+        )
+    if args.summary:
+        _append_text(args.summary, render_summary(findings, commit, changed))
+    if args.json:
+        print(json.dumps(payload, indent=2))
+    else:
+        print(render_text(findings, commit, changed))
+    if args.github_annotations:
+        annotations = render_annotations(findings)
+        if annotations:
+            print(annotations)
+    return exit_code(findings, strict=strict)
+
+
 def cmd_check(args: argparse.Namespace) -> int:
+    invalid = _validate_report_args(args)
+    if invalid:
+        return invalid
     repo = repo_root(Path(args.path))
     config_path = args.config or "aed.toml"
     if args.config:
@@ -164,11 +257,13 @@ def cmd_check(args: argparse.Namespace) -> int:
         changed = changed_files(repo, commit)
         findings = _run_check(repo, repo, base_ref, commit, changed, config, config_path)
 
-    if args.json:
-        print(json.dumps(json_payload(findings, commit, changed), indent=2))
-    else:
-        print(render_text(findings, commit, changed))
-    return exit_code(findings, strict=args.strict or config.fail_on_warn)
+    return _emit_reports(
+        args,
+        findings,
+        commit,
+        changed,
+        strict=args.strict or config.fail_on_warn,
+    )
 
 
 def cmd_baseline(args: argparse.Namespace) -> int:
@@ -264,16 +359,44 @@ def cmd_history(args: argparse.Namespace) -> int:
     return 0
 
 
+def _record(pair: tuple[Path, bool], created: list[Path], existing: list[Path]) -> None:
+    path, present = pair
+    (existing if present else created).append(path)
+
+
+def _init_baseline(root: Path) -> tuple[Path, bool]:
+    from . import baseline as baseline_store
+
+    config = load_config(root)
+    if not config.baseline_path:
+        raise ValueError("baseline_path is empty; baseline is disabled")
+    target = root / config.baseline_path
+    present = target.exists()
+    try:
+        data = baseline_store.collect(root, config)
+        path = baseline_store.write(root, config.baseline_path, data)
+    except baseline_store.BaselineError as exc:
+        raise ValueError(str(exc)) from exc
+    return path, present
+
+
 def cmd_init(args: argparse.Namespace) -> int:
-    from .adr import init_project
+    from .adr import init_github_workflow, init_project
 
     root = _project_root(args.path)
     created, existing = init_project(root)
+    if args.github:
+        _record(init_github_workflow(root, __version__), created, existing)
+    if args.baseline:
+        _record(_init_baseline(root), created, existing)
     for path in created:
         print(f"created  {path.relative_to(root)}")
     for path in existing:
         print(f"exists   {path.relative_to(root)}")
-    print("next: aed baseline; aed check")
+    if args.baseline:
+        print("next: aed check")
+    else:
+        print("next: aed baseline; aed check")
     return 0
 
 
