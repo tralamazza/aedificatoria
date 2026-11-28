@@ -39,7 +39,7 @@ source_roots = ["src", "."]
 #   "**/karma.conf.*", "**/playwright.config.*", "**/cypress.config.*",
 #   "**/jest.setup.*", "**/vitest.setup.*", "**/CTestTestfile.cmake",
 # ]
-# api_paths = ["**/*.py", "**/*.rs", "**/*.js", "**/*.jsx", "**/*.ts", "**/*.tsx", "**/*.mjs", "**/*.cjs", "**/*.mts", "**/*.cts", "**/*.h", "**/*.hpp", "**/*.hh", "**/*.hxx", "**/*.ixx"]
+# api_paths = ["**/*.py", "**/*.rs", "**/*.js", "**/*.jsx", "**/*.ts", "**/*.tsx", "**/*.mjs", "**/*.cjs", "**/*.mts", "**/*.cts", "**/*.h", "**/*.hpp", "**/*.hh", "**/*.hxx", "**/*.ixx", "**/*.cppm", "**/*.mpp"]
 # metric_excludes = ["docs/**", "examples/**", "benchmarks/**"]
 # allow_new_dependencies = []
 baseline_path = "aed-baseline.json"
