@@ -505,6 +505,98 @@ def _module_public_api(tree: CFile) -> dict[str, str] | None:
     return api
 
 
+def abi_surface(path: str, text: str | None) -> dict[str, str]:
+    if Path(path).suffix not in _HEADERS:
+        return {}
+    parsed = parse_text(path, text)
+    if parsed is None:
+        return {}
+    api: dict[str, str] = {}
+    _abi_declarations(parsed.tree.root_node, "", api)
+    return api
+
+
+def _record_header(node: Node) -> str:
+    text = _text(node)
+    return _semantic_text(text.split("{", 1)[0])
+
+
+def _abi_record(
+    node: Node, prefix: str, api: dict[str, str], template_params: str = ""
+) -> None:
+    name = _name(_field(node, "name"))
+    if not name:
+        return
+    parts = [node.type, _record_header(node)]
+    if template_params:
+        parts.append(template_params)
+    body = _field(node, "body")
+    if body is not None:
+        for child in body.named_children:
+            if child.type == "field_declaration":
+                declarator = _field(child, "declarator")
+                if declarator is not None and declarator.type == "function_declarator":
+                    if "virtual" in _semantic_text(_text(child)):
+                        parts.append(
+                            "virtual:" + _semantic_text(_function_signature(child, declarator))
+                        )
+                    continue
+                if _is_static(child):
+                    continue
+                parts.append("field:" + _semantic_text(_text(child)))
+            elif child.type in {"declaration", "function_definition"}:
+                declarator = _field(child, "declarator")
+                if (
+                    declarator is not None
+                    and declarator.type == "function_declarator"
+                    and "virtual" in _semantic_text(_text(child))
+                ):
+                    parts.append(
+                        "virtual:" + _semantic_text(_function_signature(child, declarator))
+                    )
+    api[prefix + name] = "|".join(parts)
+
+
+def _abi_enum(
+    node: Node, prefix: str, api: dict[str, str], template_params: str = ""
+) -> None:
+    name = _name(_field(node, "name"))
+    if name:
+        value = "enum:" + _record_header(node)
+        if template_params:
+            value += ":" + template_params
+        api[prefix + name] = value
+
+
+def _abi_declarations(container: Node, prefix: str, api: dict[str, str]) -> None:
+    for child in container.named_children:
+        kind = child.type
+        if kind == "namespace_definition":
+            name = _name(_field(child, "name"))
+            body = _field(child, "body")
+            if body is not None:
+                _abi_declarations(body, prefix + (name + "::" if name else ""), api)
+        elif kind == "linkage_specification":
+            body = _field(child, "body")
+            if body is not None:
+                _abi_declarations(body, prefix, api)
+        elif kind == "template_declaration":
+            template_params = ""
+            for nested in child.named_children:
+                if nested.type == "template_parameter_list":
+                    template_params = _semantic_text(_text(nested))
+                elif nested.type in {"struct_specifier", "class_specifier", "union_specifier"}:
+                    _abi_record(nested, prefix, api, template_params)
+                elif nested.type == "enum_specifier":
+                    _abi_enum(nested, prefix, api, template_params)
+        elif kind in {"struct_specifier", "class_specifier", "union_specifier"}:
+            _abi_record(child, prefix, api)
+        elif kind == "enum_specifier":
+            _abi_enum(child, prefix, api)
+        elif kind in {"preproc_ifdef", "preproc_if", "preproc_else", "preproc_elif"}:
+            _abi_declarations(child, prefix, api)
+
+
 def public_api(tree: CFile | None) -> dict[str, str]:
     if tree is None or Path(tree.path).suffix not in _HEADERS:
         return {}

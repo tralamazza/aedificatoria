@@ -25,6 +25,7 @@
       "CFile": "class()",
       "EXTENSIONS": "const",
       "NAME": "const",
+      "abi_surface": "(path:str,text:str|None)->dict[str,str]",
       "complexity": "(tree:CFile|None)->dict[str,int]",
       "declared_dependencies": "(_root:Path,_config:Config)->dict[str,tuple[str,int]]",
       "is_stdlib": "(module:str)->bool",
@@ -37,6 +38,7 @@
       "test_info": "(tree:CFile|None)->TestInfo"
     },
     "src/aedificatoria/checks.py": {
+      "check_abi": "(ctx:Context)->list[Finding]",
       "check_adr_quality": "(ctx:Context)->list[Finding]",
       "check_baseline": "(ctx:Context)->list[Finding]",
       "check_cargo_advisory": "(ctx:Context)->list[Finding]",
@@ -162,6 +164,7 @@
     "src/aedificatoria/languages.py": {
       "ADAPTERS": "const",
       "Adapter": "class()",
+      "abi_surface": "(adapter:Adapter,path:str,text:str|None)->dict[str,str]",
       "declared_dependencies": "(root:Path,config:Config,language:str)->dict[str,tuple[str,int]]",
       "extensions": "()->tuple[str,...]",
       "get": "(path:str)->Adapter|None",
@@ -284,6 +287,9 @@
       "metadata": 5
     },
     "src/aedificatoria/cfamily.py": {
+      "_abi_declarations": 15,
+      "_abi_enum": 3,
+      "_abi_record": 14,
       "_add_aggregate": 4,
       "_add_concept": 2,
       "_add_function": 3,
@@ -317,6 +323,7 @@
       "_namespace_declarations": 3,
       "_norm": 1,
       "_parse": 1,
+      "_record_header": 1,
       "_record_test_definition": 9,
       "_run_test_name": 8,
       "_semantic_text": 1,
@@ -328,6 +335,7 @@
       "_test_impl_name": 2,
       "_text": 3,
       "_typedef_declaration": 6,
+      "abi_surface": 3,
       "complexity": 2,
       "declared_dependencies": 1,
       "is_stdlib": 1,
@@ -340,6 +348,8 @@
       "test_info": 2
     },
     "src/aedificatoria/checks.py": {
+      "_abi_evidence": 6,
+      "_abi_severity": 3,
       "_accepted_adrs": 3,
       "_adr_changes": 8,
       "_adr_status": 2,
@@ -364,6 +374,7 @@
       "_test_config_finding": 11,
       "_top_dirs": 4,
       "_weakened_test_findings": 15,
+      "check_abi": 14,
       "check_adr_quality": 9,
       "check_baseline": 4,
       "check_cargo_advisory": 4,
@@ -599,6 +610,7 @@
       "test_info": 2
     },
     "src/aedificatoria/languages.py": {
+      "abi_surface": 2,
       "declared_dependencies": 2,
       "extensions": 3,
       "get": 3,

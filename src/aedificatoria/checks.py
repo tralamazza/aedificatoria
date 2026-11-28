@@ -698,6 +698,61 @@ def check_public_api(ctx: Context) -> list[Finding]:
     return findings
 
 
+def _abi_severity(ctx: Context, valid_adrs: list[ChangedFile], path: str) -> tuple[str, str]:
+    message = f"ABI layout change in {path}"
+    if not ctx.config.block_breaking_api:
+        return "info", message
+    if valid_adrs:
+        return "warn", f"{message} (justified by {valid_adrs[0].path})"
+    return "error", f"{message} without an ADR"
+
+
+def _abi_evidence(base: dict[str, str], head: dict[str, str]) -> str:
+    removed = sorted(set(base) - set(head))
+    changed = sorted(
+        name for name in set(base) & set(head) if base[name] != head[name]
+    )
+    parts: list[str] = []
+    if removed:
+        parts.append("removed records: " + ", ".join(removed[:6]))
+    if changed:
+        details = "; ".join(f"{name}: {base[name]} -> {head[name]}" for name in changed[:4])
+        parts.append("layout changes: " + details)
+    return " | ".join(parts)[:600]
+
+
+def check_abi(ctx: Context) -> list[Finding]:
+    valid_adrs = [item for item in _adr_changes(ctx) if _adr_valid(ctx, item)[0]]
+    findings: list[Finding] = []
+    for item in _relevant(ctx):
+        if not ctx.config.is_api(item.path) or ctx.config.is_metric_excluded(item.path):
+            continue
+        adapter = languages.get(item.path)
+        if adapter is None or adapter.name != "c_cpp":
+            continue
+        base = languages.abi_surface(adapter, item.base_path, ctx.base_text(item.base_path))
+        head = languages.abi_surface(adapter, item.path, ctx.head_text(item.path))
+        if not base and not head:
+            continue
+        removed = set(base) - set(head)
+        changed = {
+            name for name in set(base) & set(head) if base[name] != head[name]
+        }
+        if not removed and not changed:
+            continue
+        severity, message = _abi_severity(ctx, valid_adrs, item.path)
+        findings.append(
+            Finding(
+                "abi",
+                severity,
+                message,
+                path=item.path,
+                evidence=_abi_evidence(base, head),
+            )
+        )
+    return findings
+
+
 def check_new_dependencies(ctx: Context) -> list[Finding]:
     base_imports = languages.project_imports(ctx.base_dir, ctx.config)
     head_imports = languages.project_imports(ctx.repo, ctx.config)
@@ -833,6 +888,7 @@ def run_checks(ctx: Context) -> list[Finding]:
         check_import_graph,
         check_complexity,
         check_public_api,
+        check_abi,
         check_new_dependencies,
         check_adr_quality,
         check_cargo_advisory,

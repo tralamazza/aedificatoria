@@ -774,6 +774,142 @@
           "content": "export module math;\nexport int add(int a, int b);\nmodule :private;\nlong hidden(long a) { return a; }\n"
         }
       ]
+    },
+    {
+      "name": "cpp_abi_struct_field_reordered",
+      "description": "Reordering public struct fields must break layout ABI.",
+      "expect": "block",
+      "rules": ["abi"],
+      "base": {
+        "README.md": "base\n",
+        "include/config.h": "struct Config { int count; double ratio; };\n"
+      },
+      "changes": [
+        {
+          "op": "write",
+          "path": "include/config.h",
+          "content": "struct Config { double ratio; int count; };\n"
+        }
+      ]
+    },
+    {
+      "name": "cpp_abi_enum_underlying_changed",
+      "description": "Changing an enum underlying type must break ABI.",
+      "expect": "block",
+      "rules": ["abi"],
+      "base": {
+        "README.md": "base\n",
+        "include/api.h": "enum class Mode : unsigned char { A, B };\n"
+      },
+      "changes": [
+        {
+          "op": "write",
+          "path": "include/api.h",
+          "content": "enum class Mode : unsigned int { A, B };\n"
+        }
+      ]
+    },
+    {
+      "name": "cpp_abi_virtual_method_order_changed",
+      "description": "Reordering virtual methods must break vtable ABI.",
+      "expect": "block",
+      "rules": ["abi"],
+      "base": {
+        "README.md": "base\n",
+        "include/api.h": "struct Base { virtual void first(); virtual void second(); };\n"
+      },
+      "changes": [
+        {
+          "op": "write",
+          "path": "include/api.h",
+          "content": "struct Base { virtual void second(); virtual void first(); };\n"
+        }
+      ]
+    },
+    {
+      "name": "cpp_abi_packed_attribute_changed",
+      "description": "Changing struct packing must break layout ABI.",
+      "expect": "block",
+      "rules": ["abi"],
+      "base": {
+        "README.md": "base\n",
+        "include/api.h": "struct __attribute__((packed)) Packet { int code; char flag; };\n"
+      },
+      "changes": [
+        {
+          "op": "write",
+          "path": "include/api.h",
+          "content": "struct Packet { int code; char flag; };\n"
+        }
+      ]
+    },
+    {
+      "name": "cpp_abi_struct_field_added",
+      "description": "Adding a field to a public struct must break layout ABI.",
+      "expect": "block",
+      "rules": ["abi"],
+      "base": {
+        "README.md": "base\n",
+        "include/config.h": "struct Config { int count; };\n"
+      },
+      "changes": [
+        {
+          "op": "write",
+          "path": "include/config.h",
+          "content": "struct Config { int count; int flags; };\n"
+        }
+      ]
+    },
+    {
+      "name": "cpp_abi_field_width_changed",
+      "description": "Changing a public field width must break layout ABI.",
+      "expect": "block",
+      "rules": ["abi"],
+      "base": {
+        "README.md": "base\n",
+        "include/config.h": "struct Config { int count; };\n"
+      },
+      "changes": [
+        {
+          "op": "write",
+          "path": "include/config.h",
+          "content": "struct Config { long count; };\n"
+        }
+      ]
+    },
+    {
+      "name": "cpp_abi_private_method_body_is_clean",
+      "description": "Changing a non-virtual private method body must not affect ABI.",
+      "expect": "allow",
+      "rules": [],
+      "base": {
+        "README.md": "base\n",
+        "include/api.h": "struct Config { int count; void reset() {} };\n"
+      },
+      "changes": [
+        {
+          "op": "write",
+          "path": "include/api.h",
+          "content": "struct Config { int count; void reset() { count = 0; } };\n"
+        }
+      ]
+    },
+    {
+      "name": "cpp_abi_comment_is_clean",
+      "description": "Comments inside public records must not affect ABI.",
+      "expect": "allow",
+      "rules": [],
+      "base": {
+        "README.md": "base\n",
+        "include/api.h": "struct Config { int count; };\n"
+      },
+      "changes": [
+        {
+          "op": "write",
+          "path": "include/api.h",
+          "content": "struct Config {\n  // Kept for compatibility.\n  int count;\n};\n"
+        }
+      ]
     }
   ]
 }
