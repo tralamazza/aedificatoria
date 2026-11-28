@@ -98,6 +98,11 @@ _MODULE_LINE_RE = re.compile(
     r"(?m)^[ \t]*(?:export\s+)?module\s+[A-Za-z_][\w.]*(?::[A-Za-z_]\w*)?\s*;[ \t]*"
 )
 _MODULE_EMPTY_RE = re.compile(r"(?m)^[ \t]*module\s*;[ \t]*")
+_MODULE_PRIVATE_RE = re.compile(r"(?m)^[ \t]*module\s*:\s*private\s*;[ \t]*")
+_MODULE_IDENTITY_RE = re.compile(
+    r"(?m)^[ \t]*export\s+module\s+([A-Za-z_][\w.]*(?::[A-Za-z_]\w*)?)\s*;"
+)
+_EXPORT_IMPORT_RE = re.compile(r"(?m)^[ \t]*export\s+import\s+([^;]+);")
 _IMPORT_LINE_RE = re.compile(r"(?m)^[ \t]*(?:export\s+)?import\s+[^;]*;")
 _EXPORT_RE = re.compile(r"(?m)^[ \t]*export\b")
 
@@ -428,7 +433,7 @@ def _module_parse_text(path: str, text: str) -> str:
     if Path(path).suffix not in _MODULE_EXT or _MODULE_RE.search(text) is None:
         return text
     chars = list(text)
-    for pattern in (_MODULE_LINE_RE, _MODULE_EMPTY_RE, _IMPORT_LINE_RE):
+    for pattern in (_MODULE_LINE_RE, _MODULE_EMPTY_RE, _MODULE_PRIVATE_RE, _IMPORT_LINE_RE):
         for match in pattern.finditer(text):
             _blank_range(chars, match.start(), match.end())
     position = 0
@@ -486,8 +491,16 @@ def _module_public_api(tree: CFile) -> dict[str, str] | None:
     source = _module_export_source(tree)
     if source is None:
         return None
+    text = tree.tree.root_node.text.decode("utf-8", "replace")
     parsed = _parse("cpp", tree.path, source)
     api: dict[str, str] = {}
+    identity = _MODULE_IDENTITY_RE.search(text)
+    if identity is not None:
+        name = identity.group(1)
+        api["module:" + name] = "module:" + name
+    for match in _EXPORT_IMPORT_RE.finditer(text):
+        target = match.group(1).strip()
+        api["export-import:" + target] = "export-import:" + target
     _declarations(parsed.tree.root_node, "", api)
     return api
 

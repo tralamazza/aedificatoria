@@ -61,7 +61,8 @@ These are diagnostic history findings, not defect labels.
   activity; template parameters, overload sets, and concepts are compared
   structurally.
 - **C++20 modules:** exported declarations/blocks are extracted from `.ixx`,
-  `.cppm`, and `.mpp`; non-exported declarations stay internal.
+  `.cppm`, and `.mpp`; partition names and `export import` edges are API
+  identity, while non-exported declarations stay internal.
 - **googletest:** its own test inventory is large; merge-only history dominates
   many findings.
 - **Post-ADR-0047 smoke:** the 100-commit rerun reports fmt 108, json 124,
@@ -84,8 +85,8 @@ These are diagnostic history findings, not defect labels.
   test rewrites appear as findings. cJSON has only 387 commits available.
 - Pinned repositories are not vendored; the runner needs network on first use.
 - Macros/ABI/CMake targets remain shallow or unresolved; template and concept
-  checks are declarative, module extraction is export-surface only, and none are
-  instantiation-semantic.
+  checks are declarative, module extraction is export-surface only, partition
+  contents are not merged across units, and none are instantiation-semantic.
 
 ## Next depth work
 
