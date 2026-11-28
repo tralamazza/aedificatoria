@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "repos": [
+    {
+      "id": "fmt",
+      "url": "https://github.com/fmtlib/fmt.git",
+      "commit": "eda105459b7be42e72ec6337ccb388b098a2acbe",
+      "language": "C++",
+      "license": "MIT",
+      "focus": "headers, templates, API, tests, CMake"
+    },
+    {
+      "id": "json",
+      "url": "https://github.com/nlohmann/json.git",
+      "commit": "322063822f66533bb81ef8e938fd07e5f6394917",
+      "language": "C++",
+      "license": "MIT",
+      "focus": "header-only API, tests, includes"
+    },
+    {
+      "id": "libuv",
+      "url": "https://github.com/libuv/libuv.git",
+      "commit": "de4c8602d54255c4e7f3fa91dd6f44b682679724",
+      "language": "C",
+      "license": "MIT",
+      "focus": "C headers, API, tests, CMake"
+    },
+    {
+      "id": "googletest",
+      "url": "https://github.com/google/googletest.git",
+      "commit": "a46a6012a133c7c0929fdae55b321c2fe65f3c5f",
+      "language": "C++",
+      "license": "BSD-3-Clause",
+      "focus": "C++ API, GoogleTest inventory, CMake"
+    },
+    {
+      "id": "cjson",
+      "url": "https://github.com/DaveGamble/cJSON.git",
+      "commit": "6d9f2443ab071f86e5d9b43025a40929ec41c46c",
+      "language": "C",
+      "license": "MIT",
+      "focus": "C API, tests, CMake"
+    }
+  ]
+}

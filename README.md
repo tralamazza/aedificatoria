@@ -298,6 +298,8 @@ from a pinned version outside the agent-writable workspace when possible.
 | JS/TS | tree-sitter | ES/TS exports, CJS exports, methods | `test`/`it`/`describe`, `.skip`/`.only`, `.each` case tables | imports, `require`, `package.json` |
 | C/C++ | tree-sitter C/C++ | header functions/classes/enums/typedefs, public members | GoogleTest/Catch2 macros, assertions, skips | local quoted includes, external angled headers |
 
+See the [C/C++ real-world audit](docs/c-cpp-audit.md) for current depth and gaps.
+
 Adapters live in `languages.py`; rule code is language-neutral. Rust/JS/TS is
 AST-level: no macro expansion or type checking. JS/TS resolves nearest
 `tsconfig.json`/`jsconfig.json` `baseUrl`/`paths` aliases, including local
