@@ -32,6 +32,15 @@ Re-run from an existing cache without network:
 python benchmarks/cfamily/run.py --offline --output /tmp/cfamily-audit.json
 ```
 
+The 100-commit run is the quick smoke. The diagnostic deep pass uses 1,000
+commits:
+
+```sh
+python benchmarks/cfamily/run.py \
+  --offline --limit 1000 --jobs 8 \
+  --output /tmp/cfamily-audit-1k.json
+```
+
 ## What it measures
 
 For each repository, the runner executes the public `aed history --json` path over

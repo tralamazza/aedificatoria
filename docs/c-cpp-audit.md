@@ -26,6 +26,20 @@ These values reflect the post-fix rerun after both preprocessor and C test-layou
 fixes. Test files are now classified correctly, so less test code leaks into
 complexity/API metrics and some finding counts dropped.
 
+## 1,000-commit window
+
+| Repository | Language | Commits available | Time | Findings | Commits with findings |
+|---|---|---:|---:|---:|---:|
+| fmt | C++ | 1,000 | 99.5s | 774 | 202 |
+| json | C++ | 1,000 | 167.9s | 1,134 | 205 |
+| libuv | C | 1,000 | 75.0s | 997 | 322 |
+| googletest | C++ | 1,000 | 120.5s | 2,358 | 243 |
+| cJSON | C | 387 | 12.8s | 293 | 87 |
+
+All runs succeeded with `--jobs 8`; total wall time was ~476s. cJSON's clone has
+fewer than 1,000 first-parent commits, so its full available history was used.
+These are diagnostic history findings, not defect labels.
+
 ## Latest metrics
 
 | Repository | Public API symbols | Complexity functions | Dependencies | Package edges | Tests | Assertions |
@@ -59,7 +73,8 @@ complexity/API metrics and some finding counts dropped.
 
 - First-parent history mixes intentional deprecations, large merges, and test
   rewrites; findings are diagnostics, not defects.
-- Only 100 commits per repository; no 1,000-commit C/C++ window yet.
+- 1,000-commit history is noisy; intentional deprecations, large migrations, and
+  test rewrites appear as findings. cJSON has only 387 commits available.
 - Pinned repositories are not vendored; the runner needs network on first use.
 - Macros/templates/ABI/CMake targets remain shallow or unresolved.
 
@@ -67,5 +82,5 @@ complexity/API metrics and some finding counts dropped.
 
 1. Add targeted C/C++ mutation cases for API macro declarations and include
    direction using these real headers.
-2. Measure a 1,000-commit window before considering CMake/libclang depth.
-3. Consider CMake target/include metadata as the next hermetic layer.
+2. Consider CMake target/include metadata as the next hermetic layer.
+3. Add C/C++ mutation cases and precision/recall labels before libclang.
