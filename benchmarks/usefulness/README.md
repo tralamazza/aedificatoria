@@ -11,7 +11,9 @@ guard prevents useful regressions or that its review cost is acceptable.
 
 - positive cases that must produce a specific error/warning rule;
 - clean cases that must remain `allow`;
-- regression cases for known false positives and false negatives.
+- regression cases for known false positives and false negatives;
+- C/C++ cases for header API, export macros, C test assertions, Unity tests,
+  test deletion, and include-direction rules.
 
 Run:
 
@@ -24,7 +26,7 @@ the change, runs `aed check --json`, and reports case-level precision/recall and
 false-block rate:
 
 ```text
-cases=17 pass=17 tp=12 fn=0 fp=0 tn=5 precision=1.0 recall=1.0 false_block_rate=0.0
+cases=25 pass=25 tp=18 fn=0 fp=0 tn=7 precision=1.0 recall=1.0 false_block_rate=0.0
 ```
 
 CI runs the benchmark with `--gate`; the gate requires recall ≥ 0.9 and a clean

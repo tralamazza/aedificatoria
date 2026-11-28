@@ -267,6 +267,140 @@
           "content": "export interface X {\n  // Internal note.\n  a: string;\n}\n"
         }
       ]
+    },
+    {
+      "name": "cpp_guarded_api_removed",
+      "description": "A public function is removed from an include-guarded, export-macro header.",
+      "expect": "block",
+      "rules": ["public-api"],
+      "base": {
+        "README.md": "base\n",
+        "include/api.h": "#ifndef API_H\n#define API_H\n#define API_EXPORT(type) type\nAPI_EXPORT(int) add(int x);\nAPI_EXPORT(int) sub(int x);\n#endif\n"
+      },
+      "changes": [
+        {
+          "op": "write",
+          "path": "include/api.h",
+          "content": "#ifndef API_H\n#define API_H\n#define API_EXPORT(type) type\nAPI_EXPORT(int) add(int x);\n#endif\n"
+        }
+      ]
+    },
+    {
+      "name": "c_export_macro_signature_changed",
+      "description": "A public C function changes its export-macro signature.",
+      "expect": "block",
+      "rules": ["public-api"],
+      "base": {
+        "README.md": "base\n",
+        "include/api.h": "#ifndef API_H\n#define API_H\n#define API_EXPORT(type) type\nAPI_EXPORT(int) add(int x);\n#endif\n"
+      },
+      "changes": [
+        {
+          "op": "write",
+          "path": "include/api.h",
+          "content": "#ifndef API_H\n#define API_H\n#define API_EXPORT(type) type\nAPI_EXPORT(long) add(int x);\n#endif\n"
+        }
+      ]
+    },
+    {
+      "name": "libuv_test_assertion_removed",
+      "description": "A TEST_IMPL assertion is removed.",
+      "expect": "block",
+      "rules": ["test-tampering"],
+      "base": {
+        "README.md": "base\n",
+        "test/test-active.c": "#define TEST_IMPL(name) void name(void)\n#define ASSERT(x) ((void)(x))\nTEST_IMPL(active) {\n  ASSERT(1);\n  ASSERT(2);\n}\n"
+      },
+      "changes": [
+        {
+          "op": "write",
+          "path": "test/test-active.c",
+          "content": "#define TEST_IMPL(name) void name(void)\n#define ASSERT(x) ((void)(x))\nTEST_IMPL(active) {\n  ASSERT(1);\n}\n"
+        }
+      ]
+    },
+    {
+      "name": "unity_test_assertion_removed",
+      "description": "A Unity RUN_TEST assertion is removed.",
+      "expect": "block",
+      "rules": ["test-tampering"],
+      "base": {
+        "README.md": "base\n",
+        "tests/cjson_add.c": "#define RUN_TEST(name) name()\n#define TEST_ASSERT_NOT_NULL(x) ((void)(x))\nstatic void test_add(void) {\n  TEST_ASSERT_NOT_NULL(0);\n  TEST_ASSERT_NOT_NULL(1);\n}\nint main(void) {\n  RUN_TEST(test_add);\n}\n"
+      },
+      "changes": [
+        {
+          "op": "write",
+          "path": "tests/cjson_add.c",
+          "content": "#define RUN_TEST(name) name()\n#define TEST_ASSERT_NOT_NULL(x) ((void)(x))\nstatic void test_add(void) {\n  TEST_ASSERT_NOT_NULL(0);\n}\nint main(void) {\n  RUN_TEST(test_add);\n}\n"
+        }
+      ]
+    },
+    {
+      "name": "c_test_file_deleted",
+      "description": "A singular test/ C file is deleted.",
+      "expect": "block",
+      "rules": ["test-tampering"],
+      "base": {
+        "README.md": "base\n",
+        "test/test-active.c": "int test_active(void) { return 1; }\n"
+      },
+      "changes": [
+        {"op": "delete", "path": "test/test-active.c"}
+      ]
+    },
+    {
+      "name": "cpp_forbidden_include_edge",
+      "description": "An API header includes a forbidden database header.",
+      "expect": "block",
+      "rules": ["forbidden-edge"],
+      "base": {
+        "README.md": "base\n",
+        "aed.toml": "[aed]\nsource_roots = [\"src\"]\n\n[[aed.forbidden_edges]]\nfrom = \"api\"\nto = \"db\"\n",
+        "src/api/api.h": "int api(void);\n",
+        "src/db/db.h": "int db(void);\n"
+      },
+      "changes": [
+        {
+          "op": "write",
+          "path": "src/api/api.h",
+          "content": "#include \"../db/db.h\"\nint api(void);\n"
+        }
+      ]
+    },
+    {
+      "name": "cpp_header_comment_is_stable",
+      "description": "A comment-only header edit must not change public API.",
+      "expect": "allow",
+      "rules": [],
+      "base": {
+        "README.md": "base\n",
+        "include/api.h": "#ifndef API_H\n#define API_H\n#define API_EXPORT(type) type\nAPI_EXPORT(int) add(int x);\n#endif\n"
+      },
+      "changes": [
+        {
+          "op": "write",
+          "path": "include/api.h",
+          "content": "#ifndef API_H\n#define API_H\n#define API_EXPORT(type) type\n// public addition\nAPI_EXPORT(int) add(int x);\n#endif\n"
+        }
+      ]
+    },
+    {
+      "name": "c_test_assertion_added",
+      "description": "Adding a C test assertion must remain allowed.",
+      "expect": "allow",
+      "rules": [],
+      "base": {
+        "README.md": "base\n",
+        "test/test-active.c": "#define TEST_IMPL(name) void name(void)\n#define ASSERT(x) ((void)(x))\nTEST_IMPL(active) {\n  ASSERT(1);\n}\n"
+      },
+      "changes": [
+        {
+          "op": "write",
+          "path": "test/test-active.c",
+          "content": "#define TEST_IMPL(name) void name(void)\n#define ASSERT(x) ((void)(x))\nTEST_IMPL(active) {\n  ASSERT(1);\n  ASSERT(2);\n}\n"
+        }
+      ]
     }
   ]
 }
