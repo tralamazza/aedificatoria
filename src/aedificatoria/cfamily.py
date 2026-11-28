@@ -19,10 +19,11 @@ from .paths import ConfinedPathError, MAX_SOURCE_BYTES, read_text
 from .syntax import tree_sitter_error
 
 NAME = "c_cpp"
-EXTENSIONS = (".c", ".h", ".cc", ".cpp", ".cxx", ".hpp", ".hh", ".hxx", ".ixx")
-_HEADERS = frozenset({".h", ".hpp", ".hh", ".hxx", ".ixx"})
+EXTENSIONS = (".c", ".h", ".cc", ".cpp", ".cxx", ".hpp", ".hh", ".hxx", ".ixx", ".cppm", ".mpp")
+_HEADERS = frozenset({".h", ".hpp", ".hh", ".hxx", ".ixx", ".cppm", ".mpp"})
 _C_EXT = frozenset({".c", ".h"})
-_CPP_EXT = frozenset({".cc", ".cpp", ".cxx", ".hpp", ".hh", ".hxx", ".ixx"})
+_CPP_EXT = frozenset({".cc", ".cpp", ".cxx", ".hpp", ".hh", ".hxx", ".ixx", ".cppm", ".mpp"})
+_MODULE_EXT = frozenset({".ixx", ".cppm", ".mpp"})
 _GTEST = frozenset({"TEST", "TEST_F", "TEST_P", "TYPED_TEST", "TYPED_TEST_P"})
 _CATCH = frozenset({"TEST_CASE", "SCENARIO"})
 _ASSERTIONS = ("EXPECT_", "ASSERT", "REQUIRE", "CHECK", "FAIL", "TEST_ASSERT")
@@ -89,6 +90,22 @@ def _norm(text: str) -> str:
     return re.sub(r"\s+", "", text)
 
 
+_COMMENT_RE = re.compile(r"//[^\n]*|/\*.*?\*/", re.DOTALL)
+_MODULE_RE = re.compile(
+    r"(?m)^[ \t]*(?:export\s+)?module\s+[A-Za-z_][\w.]*(?::[A-Za-z_]\w*)?\s*;"
+)
+_MODULE_LINE_RE = re.compile(
+    r"(?m)^[ \t]*(?:export\s+)?module\s+[A-Za-z_][\w.]*(?::[A-Za-z_]\w*)?\s*;[ \t]*"
+)
+_MODULE_EMPTY_RE = re.compile(r"(?m)^[ \t]*module\s*;[ \t]*")
+_IMPORT_LINE_RE = re.compile(r"(?m)^[ \t]*(?:export\s+)?import\s+[^;]*;")
+_EXPORT_RE = re.compile(r"(?m)^[ \t]*export\b")
+
+
+def _semantic_text(text: str) -> str:
+    return _norm(_COMMENT_RE.sub("", text))
+
+
 def _error_count(node: Node) -> int:
     total = int(node.is_error)
     for child in node.named_children:
@@ -125,7 +142,10 @@ def syntax_error(path: str, text: str | None) -> tuple[int, str, str] | None:
     parsed = parse_text(path, text)
     if parsed is None or text is None:
         return None
-    return tree_sitter_error(parsed.tree, text)
+    syntax_text = _module_parse_text(path, text)
+    if syntax_text != text:
+        parsed = parse_text(path, syntax_text)
+    return tree_sitter_error(parsed.tree, syntax_text)
 
 
 def _name(node: Node | None) -> str:
@@ -189,6 +209,15 @@ def _add_function(
         signature = _function_signature(declaration, declarator)
         if template_params:
             signature = "template" + template_params + ":" + signature
+        _merge_signature(api, prefix + name, signature)
+
+
+def _add_concept(
+    node: Node, prefix: str, api: dict[str, str], template_params: str = ""
+) -> None:
+    name = _name(_field(node, "name"))
+    if name:
+        signature = "concept:" + template_params + ":" + _semantic_text(_text(node))
         _merge_signature(api, prefix + name, signature)
 
 
@@ -261,12 +290,16 @@ def _template_declarations(node: Node, prefix: str, api: dict[str, str]) -> None
         if nested.type in {
             "declaration",
             "function_definition",
+            "concept_definition",
             "class_specifier",
             "struct_specifier",
             "union_specifier",
             "enum_specifier",
         }:
-            _declarations_one(nested, prefix, api, template_params)
+            if nested.type == "concept_definition":
+                _add_concept(nested, prefix, api, template_params)
+            else:
+                _declarations_one(nested, prefix, api, template_params)
 
 
 def _typedef_declaration(node: Node, prefix: str, api: dict[str, str]) -> None:
@@ -287,6 +320,8 @@ def _declarations(container: Node, prefix: str, api: dict[str, str]) -> None:
             _linkage_declarations(child, prefix, api)
         elif kind == "template_declaration":
             _template_declarations(child, prefix, api)
+        elif kind == "concept_definition":
+            _add_concept(child, prefix, api)
         elif kind in {"declaration", "function_definition"}:
             _declarations_one(child, prefix, api)
         elif kind in {"struct_specifier", "class_specifier", "union_specifier", "enum_specifier"}:
@@ -314,9 +349,155 @@ def _declarations_one(
             _add_aggregate(child, prefix, api, template_params)
 
 
+def _skip_quoted(text: str, start: int, quote: str) -> int:
+    i = start + 1
+    while i < len(text):
+        if text[i] == "\\":
+            i += 2
+            continue
+        if text[i] == quote:
+            return i + 1
+        i += 1
+    return len(text)
+
+
+def _skip_comment(text: str, start: int) -> int:
+    if text.startswith("//", start):
+        newline = text.find("\n", start)
+        return len(text) if newline < 0 else newline
+    end = text.find("*/", start + 2)
+    return len(text) if end < 0 else end + 2
+
+
+def _balanced_end(text: str, start: int) -> int:
+    depth = 0
+    i = start
+    while i < len(text):
+        if text.startswith("//", i) or text.startswith("/*", i):
+            i = _skip_comment(text, i)
+            continue
+        char = text[i]
+        if char in {'"', "'"}:
+            i = _skip_quoted(text, i, char)
+            continue
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return i + 1
+        i += 1
+    return len(text)
+
+
+def _declaration_end(text: str, start: int) -> int:
+    depth = 0
+    seen_brace = False
+    i = start
+    while i < len(text):
+        if text.startswith("//", i) or text.startswith("/*", i):
+            i = _skip_comment(text, i)
+            continue
+        char = text[i]
+        if char in {'"', "'"}:
+            i = _skip_quoted(text, i, char)
+            continue
+        if char == "{":
+            depth += 1
+            seen_brace = True
+        elif char == "}":
+            depth -= 1
+            if depth == 0 and seen_brace:
+                end = i + 1
+                while end < len(text) and text[end] in " \t\r\n":
+                    end += 1
+                return end + 1 if end < len(text) and text[end] == ";" else i + 1
+        elif char == ";" and depth == 0:
+            return i + 1
+        i += 1
+    return len(text)
+
+
+def _blank_range(chars: list[str], start: int, end: int) -> None:
+    for index in range(start, end):
+        if chars[index] != "\n":
+            chars[index] = " "
+
+
+def _module_parse_text(path: str, text: str) -> str:
+    if Path(path).suffix not in _MODULE_EXT or _MODULE_RE.search(text) is None:
+        return text
+    chars = list(text)
+    for pattern in (_MODULE_LINE_RE, _MODULE_EMPTY_RE, _IMPORT_LINE_RE):
+        for match in pattern.finditer(text):
+            _blank_range(chars, match.start(), match.end())
+    position = 0
+    while True:
+        match = _EXPORT_RE.search(text, position)
+        if match is None:
+            break
+        start = match.end()
+        while start < len(text) and text[start] in " \t":
+            start += 1
+        if text.startswith("module", start) or text.startswith("import", start):
+            position = start + 6
+            continue
+        if start < len(text) and text[start] == "{":
+            end = _balanced_end(text, start)
+            _blank_range(chars, match.start(), start + 1)
+            _blank_range(chars, end - 1, end)
+            position = end
+        else:
+            _blank_range(chars, match.start(), match.end())
+            position = match.end()
+    return "".join(chars)
+
+
+def _module_export_source(tree: CFile) -> str | None:
+    if Path(tree.path).suffix not in _MODULE_EXT:
+        return None
+    text = tree.tree.root_node.text.decode("utf-8", "replace")
+    if _MODULE_RE.search(text) is None:
+        return None
+    parts: list[str] = []
+    position = 0
+    while True:
+        match = _EXPORT_RE.search(text, position)
+        if match is None:
+            break
+        start = match.end()
+        while start < len(text) and text[start] in " \t":
+            start += 1
+        if text.startswith("module", start) or text.startswith("import", start):
+            position = start + 6
+            continue
+        if start < len(text) and text[start] == "{":
+            end = _balanced_end(text, start)
+            parts.append(text[start + 1 : end - 1])
+            position = end
+        else:
+            end = _declaration_end(text, start)
+            parts.append(text[start:end])
+            position = end
+    return "\n".join(parts)
+
+
+def _module_public_api(tree: CFile) -> dict[str, str] | None:
+    source = _module_export_source(tree)
+    if source is None:
+        return None
+    parsed = _parse("cpp", tree.path, source)
+    api: dict[str, str] = {}
+    _declarations(parsed.tree.root_node, "", api)
+    return api
+
+
 def public_api(tree: CFile | None) -> dict[str, str]:
     if tree is None or Path(tree.path).suffix not in _HEADERS:
         return {}
+    module_api = _module_public_api(tree)
+    if module_api is not None:
+        return module_api
     api: dict[str, str] = {}
     _declarations(tree.tree.root_node, "", api)
     return api

@@ -520,6 +520,158 @@
           "content": "#ifndef API_H\n#define API_H\ntemplate <typename T>\n// Identity function.\nT identity(T value);\n#endif\n"
         }
       ]
+    },
+    {
+      "name": "cpp_concept_removed",
+      "description": "Removing a public concept must break API.",
+      "expect": "block",
+      "rules": ["public-api"],
+      "base": {
+        "README.md": "base\n",
+        "include/api.h": "#ifndef API_H\n#define API_H\ntemplate <typename T>\nconcept Addable = requires(T a, T b) { a + b; };\ntemplate <Addable T>\nT add(T a, T b);\n#endif\n"
+      },
+      "changes": [
+        {
+          "op": "write",
+          "path": "include/api.h",
+          "content": "#ifndef API_H\n#define API_H\ntemplate <Addable T>\nT add(T a, T b);\n#endif\n"
+        }
+      ]
+    },
+    {
+      "name": "cpp_concept_requires_changed",
+      "description": "Changing a concept requirement must break API.",
+      "expect": "block",
+      "rules": ["public-api"],
+      "base": {
+        "README.md": "base\n",
+        "include/api.h": "#ifndef API_H\n#define API_H\ntemplate <typename T>\nconcept Addable = requires(T a, T b) { a + b; };\n#endif\n"
+      },
+      "changes": [
+        {
+          "op": "write",
+          "path": "include/api.h",
+          "content": "#ifndef API_H\n#define API_H\ntemplate <typename T>\nconcept Addable = requires(T a, T b) { a + b; a - b; };\n#endif\n"
+        }
+      ]
+    },
+    {
+      "name": "cpp_concept_added_is_allowed",
+      "description": "Adding a public concept must remain an API extension.",
+      "expect": "allow",
+      "rules": [],
+      "base": {
+        "README.md": "base\n",
+        "include/api.h": "#ifndef API_H\n#define API_H\ntemplate <typename T>\nconcept Addable = requires(T a, T b) { a + b; };\n#endif\n"
+      },
+      "changes": [
+        {
+          "op": "write",
+          "path": "include/api.h",
+          "content": "#ifndef API_H\n#define API_H\ntemplate <typename T>\nconcept Addable = requires(T a, T b) { a + b; };\ntemplate <typename T>\nconcept Subtractable = requires(T a, T b) { a - b; };\n#endif\n"
+        }
+      ]
+    },
+    {
+      "name": "cpp_concept_comment_is_stable",
+      "description": "A comment inside a concept must not change API.",
+      "expect": "allow",
+      "rules": [],
+      "base": {
+        "README.md": "base\n",
+        "include/api.h": "#ifndef API_H\n#define API_H\ntemplate <typename T>\nconcept Addable = requires(T a, T b) { a + b; };\n#endif\n"
+      },
+      "changes": [
+        {
+          "op": "write",
+          "path": "include/api.h",
+          "content": "#ifndef API_H\n#define API_H\ntemplate <typename T>\nconcept Addable = requires(T a, T b) {\n  // Addition is required.\n  a + b;\n};\n#endif\n"
+        }
+      ]
+    },
+    {
+      "name": "cpp_module_export_removed",
+      "description": "Removing an exported module function must break API.",
+      "expect": "block",
+      "rules": ["public-api"],
+      "base": {
+        "README.md": "base\n",
+        "src/math.ixx": "export module math;\nexport int add(int a, int b);\n"
+      },
+      "changes": [
+        {
+          "op": "write",
+          "path": "src/math.ixx",
+          "content": "export module math;\n"
+        }
+      ]
+    },
+    {
+      "name": "cpp_module_export_signature_changed",
+      "description": "Changing an exported module function must break API.",
+      "expect": "block",
+      "rules": ["public-api"],
+      "base": {
+        "README.md": "base\n",
+        "src/math.ixx": "export module math;\nexport int add(int a, int b);\n"
+      },
+      "changes": [
+        {
+          "op": "write",
+          "path": "src/math.ixx",
+          "content": "export module math;\nexport long add(int a, int b);\n"
+        }
+      ]
+    },
+    {
+      "name": "cpp_module_export_added_is_allowed",
+      "description": "Adding an exported module function must remain allowed.",
+      "expect": "allow",
+      "rules": [],
+      "base": {
+        "README.md": "base\n",
+        "src/math.cppm": "export module math;\nexport int add(int a, int b);\n"
+      },
+      "changes": [
+        {
+          "op": "write",
+          "path": "src/math.cppm",
+          "content": "export module math;\nexport int add(int a, int b);\nexport int sub(int a, int b);\n"
+        }
+      ]
+    },
+    {
+      "name": "cpp_module_internal_change_is_clean",
+      "description": "Changing a non-exported module implementation must not affect API.",
+      "expect": "allow",
+      "rules": [],
+      "base": {
+        "README.md": "base\n",
+        "src/math.ixx": "export module math;\nexport int add(int a, int b);\nint hidden(int a) { return a; }\n"
+      },
+      "changes": [
+        {
+          "op": "write",
+          "path": "src/math.ixx",
+          "content": "export module math;\nexport int add(int a, int b);\nlong hidden(long a) { return a; }\n"
+        }
+      ]
+    },
+    {
+      "name": "cpp_module_file_added_is_clean",
+      "description": "Adding a valid module interface must not be a syntax-error finding.",
+      "expect": "allow",
+      "rules": [],
+      "base": {
+        "README.md": "base\n"
+      },
+      "changes": [
+        {
+          "op": "write",
+          "path": "src/math.ixx",
+          "content": "export module math;\nexport int add(int a, int b);\n"
+        }
+      ]
     }
   ]
 }

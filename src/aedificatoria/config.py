@@ -123,6 +123,8 @@ _DEFAULT_API_PATHS = (
     "**/*.hh",
     "**/*.hxx",
     "**/*.ixx",
+    "**/*.cppm",
+    "**/*.mpp",
 )
 
 
