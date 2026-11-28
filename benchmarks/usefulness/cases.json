@@ -401,6 +401,125 @@
           "content": "#define TEST_IMPL(name) void name(void)\n#define ASSERT(x) ((void)(x))\nTEST_IMPL(active) {\n  ASSERT(1);\n  ASSERT(2);\n}\n"
         }
       ]
+    },
+    {
+      "name": "cpp_template_function_removed",
+      "description": "Removing a public function template must break API.",
+      "expect": "block",
+      "rules": ["public-api"],
+      "base": {
+        "README.md": "base\n",
+        "include/api.h": "#ifndef API_H\n#define API_H\n#define API_EXPORT(type) type\ntemplate <typename T>\nAPI_EXPORT(T) identity(T value);\nAPI_EXPORT(int) add(int x);\n#endif\n"
+      },
+      "changes": [
+        {
+          "op": "write",
+          "path": "include/api.h",
+          "content": "#ifndef API_H\n#define API_H\n#define API_EXPORT(type) type\nAPI_EXPORT(int) add(int x);\n#endif\n"
+        }
+      ]
+    },
+    {
+      "name": "cpp_template_parameter_changed",
+      "description": "Changing template parameters must change the public API signature.",
+      "expect": "block",
+      "rules": ["public-api"],
+      "base": {
+        "README.md": "base\n",
+        "include/api.h": "#ifndef API_H\n#define API_H\ntemplate <typename T>\nT identity(T value);\n#endif\n"
+      },
+      "changes": [
+        {
+          "op": "write",
+          "path": "include/api.h",
+          "content": "#ifndef API_H\n#define API_H\ntemplate <typename T, typename U>\nT identity(T value);\n#endif\n"
+        }
+      ]
+    },
+    {
+      "name": "cpp_template_class_field_removed",
+      "description": "Removing a field from a public template class must break API.",
+      "expect": "block",
+      "rules": ["public-api"],
+      "base": {
+        "README.md": "base\n",
+        "include/api.h": "#ifndef API_H\n#define API_H\ntemplate <typename T>\nstruct Box { T value; };\n#endif\n"
+      },
+      "changes": [
+        {
+          "op": "write",
+          "path": "include/api.h",
+          "content": "#ifndef API_H\n#define API_H\ntemplate <typename T>\nstruct Box { };\n#endif\n"
+        }
+      ]
+    },
+    {
+      "name": "cpp_overload_added_is_allowed",
+      "description": "Adding an overload must remain an allowed API extension.",
+      "expect": "allow",
+      "rules": [],
+      "base": {
+        "README.md": "base\n",
+        "include/api.h": "#ifndef API_H\n#define API_H\nint compute(int x);\n#endif\n"
+      },
+      "changes": [
+        {
+          "op": "write",
+          "path": "include/api.h",
+          "content": "#ifndef API_H\n#define API_H\nint compute(int x);\ndouble compute(double x);\n#endif\n"
+        }
+      ]
+    },
+    {
+      "name": "cpp_overload_removed",
+      "description": "Removing one overload must break the overload set.",
+      "expect": "block",
+      "rules": ["public-api"],
+      "base": {
+        "README.md": "base\n",
+        "include/api.h": "#ifndef API_H\n#define API_H\nint compute(int x);\ndouble compute(double x);\n#endif\n"
+      },
+      "changes": [
+        {
+          "op": "write",
+          "path": "include/api.h",
+          "content": "#ifndef API_H\n#define API_H\nint compute(int x);\n#endif\n"
+        }
+      ]
+    },
+    {
+      "name": "cpp_overload_signature_changed",
+      "description": "Changing one overload signature must break API.",
+      "expect": "block",
+      "rules": ["public-api"],
+      "base": {
+        "README.md": "base\n",
+        "include/api.h": "#ifndef API_H\n#define API_H\nint compute(int x);\ndouble compute(double x);\n#endif\n"
+      },
+      "changes": [
+        {
+          "op": "write",
+          "path": "include/api.h",
+          "content": "#ifndef API_H\n#define API_H\nint compute(int x);\nlong compute(double x);\n#endif\n"
+        }
+      ]
+    },
+    {
+      "name": "cpp_template_comment_is_stable",
+      "description": "A comment inside a function template must not change API.",
+      "expect": "allow",
+      "rules": [],
+      "base": {
+        "README.md": "base\n",
+        "include/api.h": "#ifndef API_H\n#define API_H\ntemplate <typename T>\nT identity(T value);\n#endif\n"
+      },
+      "changes": [
+        {
+          "op": "write",
+          "path": "include/api.h",
+          "content": "#ifndef API_H\n#define API_H\ntemplate <typename T>\n// Identity function.\nT identity(T value);\n#endif\n"
+        }
+      ]
     }
   ]
 }

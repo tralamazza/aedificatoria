@@ -58,9 +58,13 @@ These are diagnostic history findings, not defect labels.
 - **libuv:** C API/complexity/edge extraction is strong. `TEST_IMPL` inventory now
   finds 481 tests and 3,496 assertions.
 - **fmt/json:** header-heavy C++ libraries expose substantial API/complexity/test
-  activity; templates are structural only.
+  activity; template parameters and overload sets are compared structurally.
 - **googletest:** its own test inventory is large; merge-only history dominates
   many findings.
+- **Post-ADR-0047 smoke:** the 100-commit rerun reports fmt 108, json 124,
+  libuv 75, googletest 195, and cJSON 74 findings. The increase over the
+  pre-template/overload run is diagnostic volume from richer API signatures,
+  not evidence of new real-world regressions.
 
 ## What this validates
 
@@ -76,10 +80,11 @@ These are diagnostic history findings, not defect labels.
 - 1,000-commit history is noisy; intentional deprecations, large migrations, and
   test rewrites appear as findings. cJSON has only 387 commits available.
 - Pinned repositories are not vendored; the runner needs network on first use.
-- Macros/templates/ABI/CMake targets remain shallow or unresolved.
+- Macros/ABI/CMake targets remain shallow or unresolved; template checks are
+  declarative, not instantiation-semantic.
 
 ## Next depth work
 
 1. Consider CMake target/include metadata as the next hermetic layer.
-2. Add broader C/C++ mutation cases (templates/overloads) before libclang.
+2. Consider concepts, modules, and instantiation-level template checks.
 3. Keep the mutation benchmark's C/C++ cases aligned with audit discoveries.
