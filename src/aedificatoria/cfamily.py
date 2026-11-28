@@ -62,6 +62,8 @@ _BRANCHES = frozenset(
     }
 )
 _COMMON_DIRS = {"include"}
+_OVERLOAD_PREFIX = "overloads:"
+_OVERLOAD_SEPARATOR = "\x1f"
 
 _C_LANGUAGE = Language(tree_sitter_c.language())
 _CPP_LANGUAGE = Language(tree_sitter_cpp.language())
@@ -156,15 +158,38 @@ def _function_signature(declaration: Node, declarator: Node) -> str:
     return _norm(result + _text(declarator))
 
 
+def _merge_signature(api: dict[str, str], key: str, signature: str) -> None:
+    previous = api.get(key)
+    if previous is None:
+        api[key] = signature
+        return
+    if previous == signature:
+        return
+    if previous.startswith(_OVERLOAD_PREFIX):
+        signatures = previous[len(_OVERLOAD_PREFIX) :].split(_OVERLOAD_SEPARATOR)
+    else:
+        signatures = [previous]
+    if signature not in signatures:
+        signatures.append(signature)
+    if len(signatures) == 1:
+        api[key] = signatures[0]
+    else:
+        api[key] = _OVERLOAD_PREFIX + _OVERLOAD_SEPARATOR.join(sorted(signatures))
+
+
 def _add_function(
     declaration: Node,
     declarator: Node,
     prefix: str,
     api: dict[str, str],
+    template_params: str = "",
 ) -> None:
     name = _name(declarator)
     if name:
-        api[prefix + name] = _function_signature(declaration, declarator)
+        signature = _function_signature(declaration, declarator)
+        if template_params:
+            signature = "template" + template_params + ":" + signature
+        _merge_signature(api, prefix + name, signature)
 
 
 def _class_members(
@@ -196,12 +221,17 @@ def _class_members(
             _add_aggregate(child, prefix, api)
 
 
-def _add_aggregate(node: Node, prefix: str, api: dict[str, str]) -> None:
+def _add_aggregate(
+    node: Node, prefix: str, api: dict[str, str], template_params: str = ""
+) -> None:
     name = _name(_field(node, "name"))
     if not name:
         return
     key = prefix + name
-    api[key] = node.type
+    value = node.type
+    if template_params:
+        value += ":" + template_params
+    api[key] = value
     body = _field(node, "body")
     if body is not None:
         default_public = node.type != "class_specifier"
@@ -222,9 +252,21 @@ def _linkage_declarations(node: Node, prefix: str, api: dict[str, str]) -> None:
 
 
 def _template_declarations(node: Node, prefix: str, api: dict[str, str]) -> None:
+    template_params = ""
+    for child in node.named_children:
+        if child.type == "template_parameter_list":
+            template_params = _norm(_text(child))
+            break
     for nested in node.named_children:
-        if nested.type in {"declaration", "function_definition", "class_specifier"}:
-            _declarations_one(nested, prefix, api)
+        if nested.type in {
+            "declaration",
+            "function_definition",
+            "class_specifier",
+            "struct_specifier",
+            "union_specifier",
+            "enum_specifier",
+        }:
+            _declarations_one(nested, prefix, api, template_params)
 
 
 def _typedef_declaration(node: Node, prefix: str, api: dict[str, str]) -> None:
@@ -255,16 +297,21 @@ def _declarations(container: Node, prefix: str, api: dict[str, str]) -> None:
             _declarations(child, prefix, api)
 
 
-def _declarations_one(node: Node, prefix: str, api: dict[str, str]) -> None:
+def _declarations_one(
+    node: Node, prefix: str, api: dict[str, str], template_params: str = ""
+) -> None:
     if _is_static(node):
+        return
+    if node.type in {"struct_specifier", "class_specifier", "union_specifier", "enum_specifier"}:
+        _add_aggregate(node, prefix, api, template_params)
         return
     declarator = _field(node, "declarator")
     if declarator is not None and declarator.type == "function_declarator":
-        _add_function(node, declarator, prefix, api)
+        _add_function(node, declarator, prefix, api, template_params)
         return
     for child in node.named_children:
         if child.type in {"struct_specifier", "class_specifier", "union_specifier", "enum_specifier"}:
-            _add_aggregate(child, prefix, api)
+            _add_aggregate(child, prefix, api, template_params)
 
 
 def public_api(tree: CFile | None) -> dict[str, str]:

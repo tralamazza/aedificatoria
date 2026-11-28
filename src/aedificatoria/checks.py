@@ -563,12 +563,24 @@ def check_complexity(ctx: Context) -> list[Finding]:
     return findings
 
 
+_OVERLOAD_PREFIX = "overloads:"
+_OVERLOAD_SEPARATOR = "\x1f"
+
+
+def _api_signatures(value: str) -> set[str]:
+    if value.startswith(_OVERLOAD_PREFIX):
+        return set(value[len(_OVERLOAD_PREFIX) :].split(_OVERLOAD_SEPARATOR))
+    return {value}
+
+
 def _api_surface_change(
     base_surface: dict[str, str], head_surface: dict[str, str]
 ) -> tuple[list[str], list[str]]:
     removed = sorted(set(base_surface) - set(head_surface))
     changed = sorted(
-        name for name in set(base_surface) & set(head_surface) if base_surface[name] != head_surface[name]
+        name
+        for name in set(base_surface) & set(head_surface)
+        if not _api_signatures(base_surface[name]) <= _api_signatures(head_surface[name])
     )
     return removed, changed
 
